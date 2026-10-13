@@ -56,6 +56,8 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
 
   async function save(confirmBelowCost = false) {
     setErrs(null)
+    if (!f.name.trim()) { setTab('datos'); setErrs('Escribí el nombre del producto.'); toast('Falta el nombre del producto', true); return }
+    if (f.kind === 'product' && !(Number(f.price) > 0)) { setTab('datos'); setErrs('Cargá el precio de venta: está en esta pestaña, al lado del nombre.'); toast('Falta el precio de venta', true); return }
     const body: any = { ...f, confirmBelowCost }
     for (const k of ['code', 'barcode', 'isbn', 'qr_code', 'subcategory', 'brand', 'author', 'publisher', 'edition', 'language', 'location', 'short_description', 'description', 'offer_label', 'offer_start', 'offer_end']) if (body[k] === '') body[k] = null
     for (const k of ['id', 'images', 'suppliers', 'available', 'sell_price', 'on_offer', 'offer_label_now', 'online_price', 'online_on_offer', 'price_net', 'price_vat', 'markup', 'margin', 'stock_value', 'low', 'out', 'stock', 'reserved', 'created_at', 'updated_at', 'image_url', 'image_count', 'low_alert_active']) delete body[k]
@@ -86,6 +88,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
 
       {tab === 'datos' && <div className="form wide">
         <Field label="Nombre *" span={2}><input value={f.name} onChange={set('name')} autoFocus /></Field>
+        <Field label="Precio de venta (IVA incluido) *"><Money value={f.price} onChange={(n) => setF({ ...f, price: n })} /></Field>
         <Field label="Código interno" hint={id ? undefined : 'Si lo dejás vacío se genera solo'}><input value={f.code} onChange={set('code')} /></Field>
         <Field label="Tipo"><select value={f.kind} onChange={set('kind')}><option value="product">Producto</option><option value="service">Servicio</option></select></Field>
         {(['barcode', 'isbn', 'qr_code'] as const).map((k) => (
