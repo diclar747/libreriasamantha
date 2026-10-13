@@ -91,7 +91,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
         <Field label="Precio de venta (IVA incluido) *"><Money value={f.price} onChange={(n) => setF({ ...f, price: n })} /></Field>
         <Field label="Código interno" hint={id ? undefined : 'Si lo dejás vacío se genera solo'}><input value={f.code} onChange={set('code')} /></Field>
         <Field label="Tipo"><select value={f.kind} onChange={set('kind')}><option value="product">Producto</option><option value="service">Servicio</option></select></Field>
-        {(['barcode', 'isbn', 'qr_code'] as const).map((k) => (
+        {(['barcode', 'qr_code'] as const).map((k) => (
           <Field key={k} label={{ barcode: 'Código de barras', isbn: 'ISBN', qr_code: 'Código QR' }[k]}>
             <div className="row" style={{ flexWrap: 'nowrap' }}><input value={f[k]} onChange={set(k)} inputMode={k === 'qr_code' ? 'text' : 'numeric'} /><button type="button" className="small" title="Escanear con la cámara" onClick={() => setScan(k)}>📷</button></div>
           </Field>
@@ -101,7 +101,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
         <Field label="Subcategoría"><input value={f.subcategory} onChange={set('subcategory')} list="subs" /></Field><datalist id="subs">{(facets.data?.subcategories ?? []).filter((s: any) => s.category === f.category).map((s: any) => <option key={s.v} value={s.v} />)}</datalist>
         <Field label="Marca"><input value={f.brand} onChange={set('brand')} list="brands" /></Field><datalist id="brands">{(facets.data?.brands ?? []).map((b: string) => <option key={b} value={b} />)}</datalist>
         <Field label="Autor"><input value={f.author} onChange={set('author')} /></Field><Field label="Editorial"><input value={f.publisher} onChange={set('publisher')} /></Field>
-        <Field label="Edición"><input value={f.edition} onChange={set('edition')} /></Field><Field label="Idioma"><input value={f.language} onChange={set('language')} /></Field>
+        <Field label="Edición"><input value={f.edition} onChange={set('edition')} /></Field>
         <Field label="Unidad de venta"><input value={f.sale_unit} onChange={set('sale_unit')} list="units" /></Field>
         <Field label="Unidad de compra"><input value={f.purchase_unit} onChange={set('purchase_unit')} list="units" /></Field><datalist id="units">{(facets.data?.units ?? ['unidad', 'caja', 'paquete', 'resma']).map((u: string) => <option key={u} value={u} />)}</datalist>
         <Field label="Unidades por compra" hint="Cuántas unidades de venta trae una unidad de compra"><input type="number" min={1} value={f.units_per_purchase} onChange={(e) => setF({ ...f, units_per_purchase: Math.max(1, Number(e.target.value)) })} /></Field>

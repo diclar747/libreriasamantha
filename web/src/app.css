@@ -22,6 +22,9 @@ label.inline, label:has(> input[type="checkbox"]), label:has(> input[type="radio
 th input[type="checkbox"], td input[type="checkbox"] { display: block; }
 .toolbar-more { display: none; }
 
+/* Las pestañas de un formulario quedan siempre a la vista aunque se desplace el contenido */
+.modal-body > .tabs { position: sticky; top: -20px; z-index: 2; margin-top: -20px; padding-top: 8px; background: var(--surface); }
+
 /* ---- Dedos en vez de mouse (tablet y teléfono) */
 @media (pointer: coarse) {
   button, .btn, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) { min-height: 44px; }
@@ -146,7 +149,7 @@ th input[type="checkbox"], td input[type="checkbox"] { display: block; }
   .modal-body { flex: 1; padding: 16px; align-content: start; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .modal-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); box-shadow: 0 -8px 20px rgb(28 43 78 / 6%); }
   .modal-foot > button, .modal-foot > .btn { flex: 1 1 0; min-height: 48px; padding-inline: 8px; font-size: 15px; }
-  .modal-body > .tabs { position: sticky; top: -16px; z-index: 2; margin: -16px -16px 0; padding-inline: 16px; background: var(--surface); }
+  .modal-body > .tabs { top: -16px; margin: -16px -16px 0; padding: 4px 16px 0; }
   .gallery figure, .gallery img { width: 96px; }
   .gallery img { height: 96px; }
 
