@@ -1,0 +1,20 @@
+{
+  "name": "Librería Samantha — Tienda",
+  "short_name": "Samantha",
+  "description": "Libros, útiles escolares y papelería. Retiro en el local o delivery.",
+  "lang": "es-PY",
+  "start_url": "/tienda",
+  "scope": "/tienda",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2330b8",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Listas escolares", "url": "/tienda/listas", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Seguir mi pedido", "url": "/tienda/pedido", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

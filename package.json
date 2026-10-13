@@ -1,0 +1,12 @@
+{
+  "name": "libreria-samantha",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "test": "npm test -w server",
+    "build": "npm run build -w web"
+  }
+}
