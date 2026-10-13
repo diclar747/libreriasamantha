@@ -1,0 +1,192 @@
+/* Capa de aplicación: la gestión se usa igual en teléfono, tablet y escritorio.
+   Se carga al final para corregir desbordes y dar comportamiento de app (hojas a pantalla completa, tarjetas, zonas táctiles). */
+
+/* ---- Base táctil */
+html { -webkit-text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+body:has(.modal-backdrop, .sheet-backdrop, .pos-dialog-backdrop) { overflow: hidden; }
+button, a, label, summary, select { touch-action: manipulation; }
+
+/* Nada dentro de una grilla puede ensanchar la página */
+.main > *, .stack > *, .grid > *, .form > *, .toolbar > *, .modal-body > *, .kpis > *, .pos > * { min-width: 0; }
+.modal { max-width: 100%; min-width: 0; }
+.tabs { max-width: 100%; min-width: 0; }
+.main img, .modal img { max-width: 100%; }
+
+/* ---- Formularios: campos alineados arriba, casillas de tamaño normal */
+label { align-content: start; min-width: 0; }
+.form { align-items: start; }
+input[type="checkbox"], input[type="radio"] { width: 20px !important; height: 20px; min-height: 0 !important; padding: 0; margin: 0; flex: none; accent-color: var(--brand); cursor: pointer; }
+label.inline, label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { display: flex; flex-direction: row; align-items: center; gap: 10px; min-height: 40px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+.form > label:has(> input[type="checkbox"]) { align-self: end; }
+th input[type="checkbox"], td input[type="checkbox"] { display: block; }
+.toolbar-more { display: none; }
+
+/* ---- Dedos en vez de mouse (tablet y teléfono) */
+@media (pointer: coarse) {
+  button, .btn, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+  button.small, .btn.small { min-height: 38px; padding: 7px 12px; font-size: 13px; }
+  .tabs button { min-height: 46px; }
+  .side a { min-height: 46px; }
+  .icon-x { min-width: 44px; min-height: 44px; }
+  .pos-stepper button { width: 40px; height: 38px; }
+  .pos-stepper span { min-width: 34px; font-size: 14px; }
+  .pos-line-end button { width: 38px; height: 38px; }
+  tbody tr:hover { background: none; }
+}
+
+/* ---- Tablet: tablas anchas se deslizan dentro de su tarjeta, formularios a dos o tres columnas */
+@media (max-width: 1099px) and (min-width: 720px) {
+  .main { padding: 22px 20px 40px; }
+  .card { padding: 18px; }
+  .main .card { -webkit-overflow-scrolling: touch; }
+  .form.wide { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .modal-backdrop { padding: 3vh 16px; }
+  .modal.wide, .modal.xl { width: min(860px, 100%); }
+  .pos-modern { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); }
+  .pos-results { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .report-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 899px) and (min-width: 720px) {
+  .pos-modern { grid-template-columns: 1fr; }
+  .dash-split { grid-template-columns: 1fr; }
+}
+
+/* ---- Tablas → fichas (teléfono y tablet vertical): título arriba, datos en dos columnas, acciones al pie */
+@media (max-width: 899px) {
+  .main table, .main tbody, .main tr, .main td { display: block; width: 100%; }
+  .main thead { display: none; }
+  .main tbody tr { border: 1px solid var(--border); background: var(--surface); box-shadow: 0 5px 15px rgb(28 43 78 / 3%); }
+  .main .card table tbody tr { background: var(--surface-2); box-shadow: none; }
+  .main td::before { content: attr(data-label); flex: none; }
+  .main td:not([data-label])::before { content: none; }
+  td.clip { max-width: none; }
+  .table-wrap { overflow: visible; }
+  .table-wrap table { min-width: 0; }
+  .main tbody tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; padding: 14px; border-radius: 16px; margin-bottom: 10px; }
+  .main td, .main td.num { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; width: auto; min-width: 0; padding: 0; border: 0; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+  .main td::before { max-width: none; font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .main td[data-title] { grid-column: 1 / -1; font-size: 15px; font-weight: 700; color: var(--text); }
+  .main td[data-title]::before { content: none; }
+  .main td[data-title] .muted, .main td[data-title] small { font-weight: 500; font-size: 12.5px; }
+  .main td[data-wide] { grid-column: 1 / -1; }
+  .main td[data-actions], .main td.row { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); white-space: normal; }
+  .main td[data-actions] > button, .main td.row > button { flex: 1 1 auto; }
+  .main td[data-actions] > button.danger, .main td.row > button.danger { flex: 0 0 auto; }
+  .main td[data-check] { position: absolute; top: 12px; right: 12px; z-index: 1; }
+  .main td[data-media] { position: absolute; top: 14px; left: 14px; }
+  .main tr:has(> td[data-media]) > td[data-title] { min-height: 46px; padding-left: 56px; justify-content: center; }
+  .main tr:has(> td[data-check]) > td[data-title] { padding-right: 34px; }
+  .main td[colspan], .main td.empty { grid-column: 1 / -1; display: block; padding: 10px 0; text-align: center; }
+  .main td[colspan]::before { content: none; }
+  .main td input:not([type="checkbox"]):not([type="radio"]), .main td select { width: 100% !important; text-align: left !important; }
+  .main td:empty { display: none; }
+  .main tfoot tr { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+  .main tfoot td { display: block; width: auto; background: none; }
+}
+@media (max-width: 899px) and (min-width: 720px) {
+  .main tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+  .main tbody tr { margin-bottom: 0; }
+  .main tbody tr:has(> td[colspan]) { grid-column: 1 / -1; }
+}
+
+/* ---- Teléfono */
+@media (max-width: 719px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .main { min-width: 0; overflow-x: clip; padding: 14px 12px calc(96px + env(safe-area-inset-bottom)); }
+
+  /* El título ya está en la barra superior: la cabecera queda para el resumen y las acciones */
+  .head { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 14px; align-items: stretch; }
+  .head h1 { display: none; }
+  .head .muted { margin: 0; }
+  .head > .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .head > .row > .primary, .head > .row > :only-child { grid-column: 1 / -1; order: -1; }
+  .head > .row > * { width: 100%; text-align: center; justify-content: center; }
+  .head button.primary, .head > button { min-height: 48px; }
+
+  /* Filtros: el buscador siempre a la vista, el resto se despliega */
+  .toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; margin-bottom: 12px; }
+  .toolbar > * { min-width: 0 !important; }
+  .toolbar > :first-child, .toolbar > .grow, .toolbar > .chips, .toolbar > .chip, .toolbar > p, .toolbar > .toolbar-more { grid-column: 1 / -1; }
+  .toolbar .spacer { display: none; }
+  .toolbar input:not([type="checkbox"]):not([type="radio"]), .toolbar select { width: 100% !important; }
+  .toolbar label.inline { min-height: 44px; }
+  .toolbar input[type="date"] { min-width: 0; padding-inline: 8px; font-size: 14px; }
+  .toolbar.has-more:not(.open) > :not(:first-child):not(.toolbar-more) { display: none; }
+  .toolbar.has-more > .toolbar-more { display: flex; align-items: center; justify-content: center; gap: 8px; order: 99; background: var(--surface-2); border-color: transparent; color: var(--text); font-size: 14px; }
+  .toolbar.has-more.open > .toolbar-more { background: transparent; border-color: var(--border); color: var(--muted); }
+
+  /* Pestañas deslizables, pegadas a los bordes */
+  .tabs { margin-inline: -12px; padding-inline: 12px; gap: 2px; margin-bottom: 14px; scroll-snap-type: x proximity; }
+  .tabs button { padding: 10px 12px; font-size: 14px; scroll-snap-align: start; }
+
+  /* Indicadores */
+  .cols-4, .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi { min-height: 0; padding: 14px 14px 12px 18px; }
+  .kpi::before { top: 14px; bottom: 14px; }
+  .kpi .value { font-size: 19px; margin: 6px 0 2px; }
+  .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+  .card { padding: 14px; border-radius: 16px; }
+  .card h2 { font-size: 17px; }
+  .pager { justify-content: space-between; }
+  .pager .spacer { display: none; }
+  .pager > .muted { flex: 1 1 100%; }
+
+  /* Formularios: una columna, a pantalla completa, con los botones siempre a mano */
+  .form, .form.wide { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .form > * { grid-column: 1 / -1 !important; }
+  .form > label:has(> input[type="checkbox"]) { align-self: start; min-height: 44px; }
+  .modal-backdrop { padding: 0; align-items: flex-end; overflow: hidden; }
+  .modal, .modal.wide, .modal.xl { width: 100%; max-height: 94dvh; border-radius: 22px 22px 0 0; animation: rise .2s ease-out; }
+  .modal.wide, .modal.xl { height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .modal-head { padding: 10px 8px 10px 16px; gap: 8px; }
+  .modal.wide .modal-head, .modal.xl .modal-head { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .modal-head h2 { font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modal-body { flex: 1; padding: 16px; align-content: start; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .modal-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); box-shadow: 0 -8px 20px rgb(28 43 78 / 6%); }
+  .modal-foot > button, .modal-foot > .btn { flex: 1 1 0; min-height: 48px; padding-inline: 8px; font-size: 15px; }
+  .modal-body > .tabs { position: sticky; top: -16px; z-index: 2; margin: -16px -16px 0; padding-inline: 16px; background: var(--surface); }
+  .gallery figure, .gallery img { width: 96px; }
+  .gallery img { height: 96px; }
+
+  /* Punto de venta: catálogo arriba, cobro abajo, total siempre visible */
+  .pos-page-head { display: none; }
+  .pos-modern { gap: 14px; }
+  .pos-catalog { padding: 14px; }
+  .pos-section-heading h2 { font-size: 18px; }
+  .pos-search { position: sticky; top: calc(58px + env(safe-area-inset-top)); z-index: 5; margin-top: 12px; background: var(--surface); box-shadow: 0 6px 16px rgb(28 43 78 / 8%); }
+  .pos-search input { font-size: 16px; }
+  .pos-product-name { font-size: 13px; }
+  .pos-line-main b { font-size: 14px; }
+  .pos-line-main small, .pos-line-end strong { font-size: 13px; }
+  .pos-method { min-height: 60px; }
+  .pos-method b, .pos-credit b { font-size: 13px; }
+  .pos-method small, .pos-credit small { font-size: 11.5px; }
+  .pos-pay-input { font-size: 14px; }
+  .pos-pay-input > div { width: 170px; }
+  .pos-pay-input input { font-size: 16px; min-height: 44px; }
+  .pos-customer select { font-size: 16px; min-height: 46px; }
+  .pos-charge { min-height: 54px; font-size: 16px; }
+  .pos-secondary-actions { flex-wrap: wrap; }
+  .pos-secondary-actions button { min-height: 44px; font-size: 13px; }
+  .pos-bar { min-height: 54px; }
+  .main:has(.pos-bar) { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+  .pos-dialog > div { flex-direction: column-reverse; }
+
+  /* Barra inferior */
+  .bottombar { padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  .bottombar a, .bottombar button { min-height: 52px; align-content: center; font-size: 11.5px; }
+  .sheet-grid a { min-height: 76px; align-content: center; font-size: 12.5px; }
+  .report-nav { margin-inline: -12px; padding-inline: 12px; }
+  .prompt-preview { max-height: 50dvh; }
+}
+@media (max-width: 359px) {
+  .cols-4, .kpis, .dl { grid-template-columns: minmax(0, 1fr); }
+  .head > .row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Instalada como app: sin subrayados ni selección accidental en la navegación */
+@media (display-mode: standalone) {
+  .side, .bottombar, .topbar, .tabs { user-select: none; -webkit-user-select: none; }
+}

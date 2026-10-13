@@ -33,6 +33,7 @@ import { AskProvider } from './ui'
 import Store, { PayPage } from './store/Store'
 import './modern.css'
 import './ui.css'
+import './app.css'
 
 type Item = [path: string, label: string, icon: IconName]
 const NAV: { group: string; items: Item[] }[] = [
@@ -43,6 +44,7 @@ const NAV: { group: string; items: Item[] }[] = [
   { group: 'Gestión', items: [['/customers', 'Clientes y crédito', 'users'], ['/accounting', 'Contabilidad', 'book'], ['/automation', 'Automatización', 'bolt'], ['/prompts', 'Asistente con IA', 'sparkle'], ['/settings', 'Configuración', 'gear']] },
 ]
 // Accesos de la barra inferior en teléfono, por prioridad (los que el rol pueda ver).
+const SHORT: Record<string, string> = { '/admin': 'Inicio', '/pos': 'Vender', '/orders': 'Pedidos', '/products': 'Productos', '/purchases': 'Compras', '/sales': 'Ventas', '/cash': 'Caja', '/customers': 'Clientes' }
 const BOTTOM_PRIORITY = ['/admin', '/pos', '/orders', '/products', '/purchases', '/sales', '/cash', '/customers']
 
 const PAGES: [string, React.ReactElement][] = [
@@ -70,16 +72,46 @@ function Login() {
   )
 }
 
-// En pantallas chicas las tablas se muestran como tarjetas: cada celda toma su rótulo de la cabecera.
+// En pantallas chicas las tablas se muestran como fichas: cada celda toma su rótulo de la cabecera y su papel
+// (título, miniatura, casilla, acciones). Las barras de filtros largas se pliegan detrás de un botón.
 function useResponsiveTables() {
   const { pathname } = useLocation()
   useEffect(() => {
-    const label = () => document.querySelectorAll('.main table').forEach((t) => {
-      const heads = [...t.querySelectorAll('thead th')].map((h) => h.textContent?.trim() ?? '')
-      t.querySelectorAll('tbody tr').forEach((tr) => [...tr.children].forEach((td, i) => { if (heads[i] && td.getAttribute('data-label') !== heads[i]) td.setAttribute('data-label', heads[i]) }))
-    })
+    const mark = (el: Element, attr: string, on: boolean) => { if (on !== el.hasAttribute(attr)) on ? el.setAttribute(attr, '') : el.removeAttribute(attr) }
+    const label = () => {
+      document.querySelectorAll('.main table').forEach((t) => {
+        const heads = [...t.querySelectorAll('thead th')].map((h) => h.textContent?.replace(/[▲▼]/g, '').trim() ?? '')
+        t.querySelectorAll('tbody tr').forEach((tr) => {
+          const cells = [...tr.children]
+          const title = cells.find((_, i) => heads[i])
+          cells.forEach((td, i) => {
+            if (td.hasAttribute('colspan')) return
+            if (heads[i] && td.getAttribute('data-label') !== heads[i]) td.setAttribute('data-label', heads[i])
+            const only = td.children.length === 1 && !td.textContent?.trim() ? td.firstElementChild : null
+            mark(td, 'data-title', td === title)
+            mark(td, 'data-check', !heads[i] && !!only?.matches('input[type=checkbox]'))
+            mark(td, 'data-media', !heads[i] && !!only?.matches('img, .thumb'))
+            mark(td, 'data-actions', !heads[i] && i === cells.length - 1 && !!td.querySelector('button, a'))
+            mark(td, 'data-wide', !!heads[i] && td !== title && (td.textContent?.length ?? 0) > 42)
+          })
+        })
+      })
+      document.querySelectorAll('.main .toolbar').forEach((tb) => {
+        const more = tb.querySelector(':scope > .toolbar-more')
+        const many = tb.children.length - (more ? 1 : 0) > 3
+        mark(tb, 'data-filters', many)
+        tb.classList.toggle('has-more', many)
+        if (many && !more) {
+          const b = document.createElement('button')
+          b.type = 'button'; b.className = 'toolbar-more'; b.textContent = 'Más filtros'
+          b.onclick = () => { const open = tb.classList.toggle('open'); b.textContent = open ? 'Ocultar filtros' : 'Más filtros' }
+          tb.appendChild(b)
+        }
+      })
+    }
     label()
-    const obs = new MutationObserver(label)
+    let queued = false
+    const obs = new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; label() }) })
     const main = document.querySelector('.main')
     if (main) obs.observe(main, { childList: true, subtree: true })
     return () => obs.disconnect()
@@ -151,7 +183,7 @@ function Shell() {
       </main>
 
       <nav className="bottombar" aria-label="Accesos rápidos">
-        {bottom.map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/'}><Icon name={icon} /><span>{label.split(' ')[0]}</span></NavLink>)}
+        {bottom.map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/'}><Icon name={icon} /><span>{SHORT[to] ?? label.split(' ')[0]}</span></NavLink>)}
         <button onClick={() => setSheet(true)} aria-haspopup="dialog"><Icon name="menu" /><span>Más</span></button>
       </nav>
 
