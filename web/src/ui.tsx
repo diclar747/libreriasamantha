@@ -101,7 +101,7 @@ export function Pager({ page, pages, total, pageSize, onPage, onSize, sizes = [1
 }
 
 export function Field({ label, children, hint, error, span }: { label: string; children: ReactNode; hint?: string; error?: string; span?: number }) {
-  return <label className={error ? 'has-error' : ''} style={span ? { gridColumn: `span ${span}` } : undefined}>{label}{children}{hint && <small className="muted">{hint}</small>}{error && <small className="err">{error}</small>}</label>
+  return <label className={error ? 'has-error' : ''} style={span ? { gridColumn: span >= 4 ? '1 / -1' : `span ${span}` } : undefined}>{label}{children}{hint && <small className="muted">{hint}</small>}{error && <small className="err">{error}</small>}</label>
 }
 
 /** Importe en guaraníes con separador de miles mientras se escribe. */

@@ -22,8 +22,27 @@ label.inline, label:has(> input[type="checkbox"]), label:has(> input[type="radio
 th input[type="checkbox"], td input[type="checkbox"] { display: block; }
 .toolbar-more { display: none; }
 
+/* El contenido de un formulario nunca se aplasta: si no entra, se desplaza */
+.modal-body { grid-auto-rows: max-content; }
+.tabs { flex: none; }
 /* Las pestañas de un formulario quedan siempre a la vista aunque se desplace el contenido */
-.modal-body > .tabs { position: sticky; top: -20px; z-index: 2; margin-top: -20px; padding-top: 8px; background: var(--surface); }
+.modal-body > .tabs { position: sticky; top: 0; z-index: 2; margin-top: -20px; padding-top: 8px; background: var(--surface); }
+
+/* ---- Formularios largos: secciones con título y grilla fija de 4 columnas */
+.fsecs { display: grid; gap: 22px; min-width: 0; }
+.fsec { display: grid; gap: 12px; min-width: 0; }
+.fsec + .fsec { padding-top: 20px; border-top: 1px solid var(--border); }
+.fsec > h3 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.form.fgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 16px; }
+.fgrid-action { align-self: end; }
+.fgrid small.muted { font-size: 11.5px; line-height: 1.35; }
+.with-btn { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.with-btn > input { flex: 1; min-width: 0; }
+.with-btn > button { flex: none; width: 44px; padding: 0; display: grid; place-items: center; }
+.fchecks { display: flex; flex-wrap: wrap; gap: 10px; }
+.fchecks > label { padding: 8px 14px 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.fchecks > label:has(input:checked) { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); background: var(--brand-soft); }
+@media (max-width: 1099px) { .form.fgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---- Dedos en vez de mouse (tablet y teléfono) */
 @media (pointer: coarse) {
@@ -137,7 +156,10 @@ th input[type="checkbox"], td input[type="checkbox"] { display: block; }
   .pager > .muted { flex: 1 1 100%; }
 
   /* Formularios: una columna, a pantalla completa, con los botones siempre a mano */
-  .form, .form.wide { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .form, .form.wide, .form.fgrid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .fsecs { gap: 18px; }
+  .fsec + .fsec { padding-top: 16px; }
+  .fchecks { display: grid; }
   .form > * { grid-column: 1 / -1 !important; }
   .form > label:has(> input[type="checkbox"]) { align-self: start; min-height: 44px; }
   .modal-backdrop { padding: 0; align-items: flex-end; overflow: hidden; }
@@ -149,7 +171,7 @@ th input[type="checkbox"], td input[type="checkbox"] { display: block; }
   .modal-body { flex: 1; padding: 16px; align-content: start; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .modal-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); box-shadow: 0 -8px 20px rgb(28 43 78 / 6%); }
   .modal-foot > button, .modal-foot > .btn { flex: 1 1 0; min-height: 48px; padding-inline: 8px; font-size: 15px; }
-  .modal-body > .tabs { top: -16px; margin: -16px -16px 0; padding: 4px 16px 0; }
+  .modal-body > .tabs { margin: -16px -16px 4px; padding: 4px 16px 0; }
   .gallery figure, .gallery img { width: 96px; }
   .gallery img { height: 96px; }
 

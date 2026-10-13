@@ -86,30 +86,60 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
       {errs && <div className="errbox">{errs}</div>}
       {needConfirm && <div className="warnbox">El precio (o la oferta) queda <b>por debajo del costo</b>. <button className="small" onClick={() => { setNeedConfirm(false); save(true) }}>Guardar igual</button></div>}
 
-      {tab === 'datos' && <div className="form wide">
-        <Field label="Nombre *" span={2}><input value={f.name} onChange={set('name')} autoFocus /></Field>
-        <Field label="Precio de venta (IVA incluido) *"><Money value={f.price} onChange={(n) => setF({ ...f, price: n })} /></Field>
-        <Field label="Código interno" hint={id ? undefined : 'Si lo dejás vacío se genera solo'}><input value={f.code} onChange={set('code')} /></Field>
-        <Field label="Tipo"><select value={f.kind} onChange={set('kind')}><option value="product">Producto</option><option value="service">Servicio</option></select></Field>
-        {(['barcode', 'qr_code'] as const).map((k) => (
-          <Field key={k} label={{ barcode: 'Código de barras', isbn: 'ISBN', qr_code: 'Código QR' }[k]}>
-            <div className="row" style={{ flexWrap: 'nowrap' }}><input value={f[k]} onChange={set(k)} inputMode={k === 'qr_code' ? 'text' : 'numeric'} /><button type="button" className="small" title="Escanear con la cámara" onClick={() => setScan(k)}>📷</button></div>
-          </Field>
-        ))}
-        {id && !f.barcode && <div style={{ alignSelf: 'end' }}><button type="button" onClick={async () => { try { const r = await api(`/products/${id}/generate-barcode`, { method: 'POST', body: {} }); setF({ ...f, barcode: r.barcode }); toast('Código interno generado') } catch (e: any) { toast(e.message, true) } }}>Generar código interno</button></div>}
-        <Field label="Categoría"><input list="cats" value={f.category} onChange={set('category')} /></Field><datalist id="cats">{catList.map((c: string) => <option key={c} value={c} />)}</datalist>
-        <Field label="Subcategoría"><input value={f.subcategory} onChange={set('subcategory')} list="subs" /></Field><datalist id="subs">{(facets.data?.subcategories ?? []).filter((s: any) => s.category === f.category).map((s: any) => <option key={s.v} value={s.v} />)}</datalist>
-        <Field label="Marca"><input value={f.brand} onChange={set('brand')} list="brands" /></Field><datalist id="brands">{(facets.data?.brands ?? []).map((b: string) => <option key={b} value={b} />)}</datalist>
-        <Field label="Autor"><input value={f.author} onChange={set('author')} /></Field><Field label="Editorial"><input value={f.publisher} onChange={set('publisher')} /></Field>
-        <Field label="Edición"><input value={f.edition} onChange={set('edition')} /></Field>
-        <Field label="Unidad de venta"><input value={f.sale_unit} onChange={set('sale_unit')} list="units" /></Field>
-        <Field label="Unidad de compra"><input value={f.purchase_unit} onChange={set('purchase_unit')} list="units" /></Field><datalist id="units">{(facets.data?.units ?? ['unidad', 'caja', 'paquete', 'resma']).map((u: string) => <option key={u} value={u} />)}</datalist>
-        <Field label="Unidades por compra" hint="Cuántas unidades de venta trae una unidad de compra"><input type="number" min={1} value={f.units_per_purchase} onChange={(e) => setF({ ...f, units_per_purchase: Math.max(1, Number(e.target.value)) })} /></Field>
-        <Field label="Ubicación"><input value={f.location} onChange={set('location')} placeholder="Estante, pasillo…" /></Field>
-        <Field label="Descripción corta" span={2}><input value={f.short_description} onChange={set('short_description')} maxLength={200} /></Field>
-        <Field label="Descripción completa" span={4}><textarea rows={3} value={f.description} onChange={set('description')} /></Field>
-        <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={f.active} onChange={set('active')} /> Producto activo</label>
-        <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={f.online_visible} onChange={set('online_visible')} /> Visible en la tienda online</label>
+      {tab === 'datos' && <div className="fsecs">
+        <section className="fsec">
+          <h3>Lo esencial</h3>
+          <div className="form fgrid">
+            <Field label="Nombre *" span={2}><input value={f.name} onChange={set('name')} autoFocus placeholder="Como lo va a ver el cliente" /></Field>
+            <Field label="Precio de venta (IVA incluido) *"><Money value={f.price} onChange={(n) => setF({ ...f, price: n })} /></Field>
+            <Field label="Tipo"><select value={f.kind} onChange={set('kind')}><option value="product">Producto</option><option value="service">Servicio</option></select></Field>
+            <Field label="Categoría" span={2}><input list="cats" value={f.category} onChange={set('category')} /></Field><datalist id="cats">{catList.map((c: string) => <option key={c} value={c} />)}</datalist>
+            <Field label="Subcategoría" span={2}><input value={f.subcategory} onChange={set('subcategory')} list="subs" /></Field><datalist id="subs">{(facets.data?.subcategories ?? []).filter((s: any) => s.category === f.category).map((s: any) => <option key={s.v} value={s.v} />)}</datalist>
+          </div>
+        </section>
+
+        <section className="fsec">
+          <h3>Códigos</h3>
+          <div className="form fgrid">
+            <Field label="Código interno" hint={id ? undefined : 'Si lo dejás vacío se genera solo'}><input value={f.code} onChange={set('code')} /></Field>
+            {(['barcode', 'qr_code'] as const).map((k) => (
+              <Field key={k} label={{ barcode: 'Código de barras', qr_code: 'Código QR' }[k]}>
+                <div className="with-btn"><input value={f[k]} onChange={set(k)} inputMode={k === 'qr_code' ? 'text' : 'numeric'} /><button type="button" title="Escanear con la cámara" aria-label="Escanear con la cámara" onClick={() => setScan(k)}>📷</button></div>
+              </Field>
+            ))}
+            {id && !f.barcode && <div className="fgrid-action"><button type="button" onClick={async () => { try { const r = await api(`/products/${id}/generate-barcode`, { method: 'POST', body: {} }); setF({ ...f, barcode: r.barcode }); toast('Código interno generado') } catch (e: any) { toast(e.message, true) } }}>Generar código de barras</button></div>}
+          </div>
+        </section>
+
+        <section className="fsec">
+          <h3>Detalle</h3>
+          <div className="form fgrid">
+            <Field label="Marca"><input value={f.brand} onChange={set('brand')} list="brands" /></Field><datalist id="brands">{(facets.data?.brands ?? []).map((b: string) => <option key={b} value={b} />)}</datalist>
+            <Field label="Autor"><input value={f.author} onChange={set('author')} /></Field>
+            <Field label="Editorial"><input value={f.publisher} onChange={set('publisher')} /></Field>
+            <Field label="Edición"><input value={f.edition} onChange={set('edition')} /></Field>
+            <Field label="Descripción corta" span={4}><input value={f.short_description} onChange={set('short_description')} maxLength={200} placeholder="Una línea para el listado de la tienda" /></Field>
+            <Field label="Descripción completa" span={4}><textarea rows={3} value={f.description} onChange={set('description')} /></Field>
+          </div>
+        </section>
+
+        <section className="fsec">
+          <h3>Unidades y ubicación</h3>
+          <div className="form fgrid">
+            <Field label="Unidad de venta"><input value={f.sale_unit} onChange={set('sale_unit')} list="units" /></Field>
+            <Field label="Unidad de compra"><input value={f.purchase_unit} onChange={set('purchase_unit')} list="units" /></Field><datalist id="units">{(facets.data?.units ?? ['unidad', 'caja', 'paquete', 'resma']).map((u: string) => <option key={u} value={u} />)}</datalist>
+            <Field label="Unidades por compra" hint="Cuántas unidades de venta trae una de compra"><input type="number" min={1} value={f.units_per_purchase} onChange={(e) => setF({ ...f, units_per_purchase: Math.max(1, Number(e.target.value)) })} /></Field>
+            <Field label="Ubicación"><input value={f.location} onChange={set('location')} placeholder="Estante, pasillo…" /></Field>
+          </div>
+        </section>
+
+        <section className="fsec">
+          <h3>Estado</h3>
+          <div className="fchecks">
+            <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={f.active} onChange={set('active')} /> Producto activo</label>
+            <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={f.online_visible} onChange={set('online_visible')} /> Visible en la tienda online</label>
+          </div>
+        </section>
       </div>}
 
       {tab === 'precios' && <div className="stack">
