@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import webpush from 'web-push'
 import { z } from 'zod'
-import { can, hashPassword, verifyPassword } from './auth.js'
+import { can, hashPassword, isDefaultPassword, verifyPassword } from './auth.js'
 import { HttpError, type Db, type Tx } from './db/client.js'
 import { getSecret, setSecret } from './secrets.js'
 import { getSetting } from './services.js'
@@ -108,7 +108,9 @@ export function profileRoutes(app: FastifyInstance, db: Db) {
     const b = z.object({ current: z.string(), next: z.string().min(8, 'La contraseña nueva necesita al menos 8 caracteres') }).parse(req.body)
     const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user!.id])
     if (!verifyPassword(b.current, rows[0].password_hash)) throw new HttpError(400, 'La contraseña actual no coincide')
+    if (isDefaultPassword(b.next)) throw new HttpError(400, 'Esa contraseña es demasiado común. Elegí otra.')
     await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user!.id, hashPassword(b.next)])
+    await db.query('UPDATE sessions SET must_change = false WHERE token = $1', [req.headers.authorization?.replace(/^Bearer /, '')])
     // Cierra las demás sesiones: quien tenga la clave vieja pierde el acceso.
     await db.query('DELETE FROM sessions WHERE user_id = $1 AND token <> $2', [req.user!.id, req.headers.authorization?.replace(/^Bearer /, '')])
     return { ok: true }

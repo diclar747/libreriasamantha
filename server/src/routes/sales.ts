@@ -43,6 +43,7 @@ const saleBody = z.object({
   workOrderId: z.number().int().optional(),
   discountReason: z.string().trim().max(200).optional(),
   approvalToken: z.string().optional(),
+  idempotencyKey: z.string().min(8).max(80).optional(),
 })
 
 // Valida y completa el detalle exigido por cada medio de cobro.
@@ -228,7 +229,11 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
     requirePerm(req, 'pos.sell')
     const b = saleBody.parse(req.body)
     const user = req.user!
-    const { sale, invoiceId } = await withTx(db, async (tx) => {
+    const existing = async () => b.idempotencyKey ? (await db.query('SELECT * FROM sales WHERE user_id = $1 AND idempotency_key = $2', [user.id, b.idempotencyKey])).rows[0] : undefined
+    const dup = await existing()
+    if (dup) return reply.code(200).send({ ...dup, duplicate: true })
+    let created: { sale: any; invoiceId: number | null }
+    try { created = await withTx(db, async (tx) => {
       const session = await openSession(tx, user.id)
       if (!session) throw new HttpError(409, 'Abrí la caja antes de vender')
 
@@ -316,6 +321,7 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
         `INSERT INTO sales (number, customer_id, user_id, session_id, subtotal, discount, total, paid, credit_amount, change_given, discount_kind, discount_pct, discount_reason, discount_approved_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
         [number, b.customerId ?? null, user.id, session.id, subtotal, b.discount, total, paid, credit, change, b.discount > 0 ? 'amount' : null, b.discount > 0 ? discPct : null, b.discountReason ?? null, usedApproval ? approver!.userId : null])
+      if (b.idempotencyKey) await tx.query('UPDATE sales SET idempotency_key = $2 WHERE id = $1', [s[0].id, b.idempotencyKey])
       const saleId = s[0].id as number
 
       for (const l of lines) {
@@ -352,7 +358,12 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
       }
       await checkReplenishment(tx, [...wanted.keys()])
       return { sale: s[0], invoiceId }
-    })
+    }) } catch (e: any) {
+      // Dos envíos simultáneos de la misma venta: gana uno y el otro devuelve la venta ya registrada.
+      if (e.code === '23505' && String(e.constraint ?? e.message).includes('sales_idem')) { const again = await existing(); if (again) return reply.code(200).send({ ...again, duplicate: true }) }
+      throw e
+    }
+    const { sale, invoiceId } = created
     if (invoiceId) await submitInvoice(db, invoiceId)
     return reply.code(201).send(sale)
   })

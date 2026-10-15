@@ -6,7 +6,7 @@ import { HttpError, withTx, type Db } from './db/client.js'
 import { notify } from './notifications.js'
 import { logOrder, notifyCustomer } from './orderflow.js'
 import { fulfillOrder } from './orders.js'
-import { isMock } from './payments.js'
+import { cardAvailable, isMock } from './payments.js'
 import { createInvoice, enqueue, getSetting, submitInvoice } from './services.js'
 
 const publicAccount = 'id, name, bank_name, account_number, holder, holder_document, account_type, alias, instructions, is_demo'
@@ -41,7 +41,7 @@ export function onlineShopRoutes(app: FastifyInstance, db: Db) {
   app.get('/payment-options', async () => {
     const { rows } = await db.query(`SELECT ${publicAccount} FROM money_accounts WHERE kind = 'bank' AND active AND online_enabled ORDER BY id`)
     const shop = await getSetting(db, 'shop')
-    return { card: { enabled: true, demo: isMock() }, cod: { enabled: !!shop.codEnabled }, transfer: { enabled: rows.length > 0, accounts: rows, reserveHours: Number(shop.transferReserveHours ?? 24) } }
+    return { card: { enabled: cardAvailable(), demo: isMock() }, cod: { enabled: !!shop.codEnabled }, transfer: { enabled: rows.length > 0, accounts: rows, reserveHours: Number(shop.transferReserveHours ?? 24) } }
   })
 
   // El cliente sube el comprobante de su transferencia; el pedido queda "en revisión" con el stock reservado.

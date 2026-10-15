@@ -41,10 +41,13 @@ export async function authenticate(db: Db, req: FastifyRequest) {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   if (!token) throw new HttpError(401, 'No autenticado')
   const { rows } = await db.query(
-    `SELECT u.id, u.username, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.username, u.name, u.role, s.must_change FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token = $1 AND u.active`, [token])
   if (!rows[0]) throw new HttpError(401, 'Sesión inválida')
-  req.user = rows[0]
+  // Ingresó con una clave por defecto: hasta que la cambie solo puede cambiarla o salir.
+  if (rows[0].must_change && !/^\/api\/(me\/password|logout)(\?|$)/.test(req.url)) throw new HttpError(403, 'Tenés que cambiar tu contraseña antes de continuar')
+  const { must_change: _m, ...user } = rows[0]
+  req.user = user
 }
 
 export function requirePerm(req: FastifyRequest, perm: string) {
@@ -54,3 +57,20 @@ export function anyPerm(req: FastifyRequest, perms: string[]) {
   if (!req.user || !perms.some((p) => can(req.user!.role, p))) throw new HttpError(403, 'Sin permiso')
 }
 export const newToken = () => randomBytes(32).toString('hex')
+
+// Claves de fábrica / demasiado obvias: se aceptan para entrar pero obligan a cambiarlas, y no se pueden volver a elegir.
+const DEFAULT_PASSWORDS = new Set(['admin1234', 'caja1234', 'compras1234', 'deposito1234', 'password', '12345678', '123456789', 'contraseña', 'samantha1234'])
+export const isDefaultPassword = (pw: string) => DEFAULT_PASSWORDS.has(pw.toLowerCase())
+
+// Límite de intentos fallidos de login (en memoria: una sola instancia). 6 por usuario+IP y 40 por IP cada 15 minutos.
+const WINDOW_MS = 15 * 60_000
+const fails = new Map<string, number[]>()
+const recent = (k: string) => { const now = Date.now(); const l = (fails.get(k) ?? []).filter((t) => now - t < WINDOW_MS); if (l.length) fails.set(k, l); else fails.delete(k); return l }
+export function clientIp(req: FastifyRequest) { return String(req.headers['cf-connecting-ip'] ?? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() ?? '') || req.ip }
+export function loginBlocked(ip: string, username: string) {
+  if (recent(`u:${ip}|${username.toLowerCase()}`).length >= 6 || recent(`ip:${ip}`).length >= 40) throw new HttpError(429, 'Demasiados intentos fallidos. Esperá 15 minutos e intentá de nuevo.')
+}
+export function loginFailed(ip: string, username: string) {
+  for (const k of [`u:${ip}|${username.toLowerCase()}`, `ip:${ip}`]) fails.set(k, [...recent(k), Date.now()])
+}
+export function loginOk(ip: string, username: string) { fails.delete(`u:${ip}|${username.toLowerCase()}`) }

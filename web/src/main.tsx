@@ -76,6 +76,29 @@ function Login() {
   )
 }
 
+// Quien ingresó con una clave de fábrica no puede usar el sistema hasta elegir una propia (el servidor también lo exige).
+function ForcePassword() {
+  const { user, passwordChanged, logout, toast } = useApp()
+  const [f, setF] = useState({ current: '', next: '', again: '' })
+  const [busy, setBusy] = useState(false)
+  const bad = f.next.length < 8 || f.next !== f.again || f.next === f.current
+  return (
+    <div className="login">
+      <form className="card" onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { await api('/me/password', { body: { current: f.current, next: f.next } }); toast('Contraseña cambiada'); passwordChanged() } catch (er: any) { toast(er.message, true) } finally { setBusy(false) } }}>
+        <div className="logo-login"><span className="logo-plate"><LogoLockup width={250} /></span></div>
+        <h2 style={{ margin: 0 }}>Elegí tu contraseña</h2>
+        <p className="muted" style={{ margin: 0 }}>{user?.name}, estás usando una contraseña de fábrica. Por seguridad, creá una propia (mínimo 8 caracteres) para continuar.</p>
+        <label>Contraseña actual<input type="password" value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} autoComplete="current-password" /></label>
+        <label>Contraseña nueva<input type="password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} autoComplete="new-password" /></label>
+        <label>Repetí la contraseña nueva<input type="password" value={f.again} onChange={(e) => setF({ ...f, again: e.target.value })} autoComplete="new-password" /></label>
+        {f.again && f.next !== f.again && <small className="err">Las contraseñas no coinciden</small>}
+        <button className="primary" disabled={busy || bad || !f.current}>{busy ? 'Guardando…' : 'Guardar y continuar'}</button>
+        <a href="#" onClick={(e) => { e.preventDefault(); logout() }} className="login-back">Salir</a>
+      </form>
+    </div>
+  )
+}
+
 // En pantallas chicas las tablas se muestran como fichas: cada celda toma su rótulo de la cabecera y su papel
 // (título, miniatura, casilla, acciones). Las barras de filtros largas se pliegan detrás de un botón.
 function useResponsiveTables() {
@@ -143,6 +166,7 @@ function Shell() {
 
   const groups = useMemo(() => user ? NAV.map((g) => ({ ...g, items: g.items.filter(([to]) => canSee[to].includes(user.role)) })).filter((g) => g.items.length) : [], [user])
   if (!user) return <Login />
+  if (user.mustChange) return <ForcePassword />
   const all = groups.flatMap((g) => g.items)
   const home = all[0]?.[0] ?? '/products'
   const bottom = BOTTOM_PRIORITY.map((p) => all.find(([to]) => to === p)).filter(Boolean).slice(0, 4) as Item[]

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
-export interface User { id: number; username: string; name: string; role: string }
+export interface User { id: number; username: string; name: string; role: string; mustChange?: boolean }
 
 const TOKEN_KEY = 'samantha.token'
 const USER_KEY = 'samantha.user'
@@ -21,7 +21,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
 export const gs = (n: number | string | null | undefined) => 'Gs. ' + Number(n ?? 0).toLocaleString('es-PY')
 export const paymentMethodLabel = (method: string) => ({ cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', check: 'Cheque', online: 'Pago en línea', advance: 'Anticipo' })[method as 'cash' | 'card' | 'transfer' | 'check' | 'online' | 'advance'] ?? method
 
-interface Ctx { user: User | null; login(u: string, p: string): Promise<void>; logout(): void; toast(msg: string, err?: boolean): void }
+interface Ctx { user: User | null; login(u: string, p: string): Promise<void>; passwordChanged(): void; logout(): void; toast(msg: string, err?: boolean): void }
 const AuthCtx = createContext<Ctx>(null as never)
 export const useApp = () => useContext(AuthCtx)
 
@@ -35,12 +35,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const r = await api('/login', { body: { username, password } })
     localStorage.setItem(TOKEN_KEY, r.token); localStorage.setItem(USER_KEY, JSON.stringify(r.user)); setUser(r.user)
   }
+  const passwordChanged = () => setUser((u) => { const n = u ? { ...u, mustChange: false } : u; if (n) localStorage.setItem(USER_KEY, JSON.stringify(n)); return n })
   const logout = () => {
     api('/logout', { method: 'POST', body: {} }).catch(() => {})
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setUser(null)
   }
   return (
-    <AuthCtx.Provider value={{ user, login, logout, toast }}>
+    <AuthCtx.Provider value={{ user, login, passwordChanged, logout, toast }}>
       {children}
       {msg && <div className={'toast' + (msg.err ? ' err' : '')}>{msg.text}</div>}
     </AuthCtx.Provider>

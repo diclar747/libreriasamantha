@@ -401,6 +401,11 @@ function Checkout() {
   const [idem] = useState(() => uid())
   const [dep, setDep] = useState('')
   useSeo('Finalizar compra — Librería Samantha', 'Completá tus datos y pagá online')
+  useEffect(() => {
+    if (!opts || opts.card?.enabled !== false || f.pay !== 'bancard') return
+    const next = opts.transfer?.enabled ? 'transfer' : opts.cod?.enabled && f.method === 'delivery' ? 'cod' : ''
+    if (next) setF((x: any) => ({ ...x, pay: next }))
+  }, [opts, f.pay, f.method])
   useEffect(() => { shop('/cities').then(setCities).catch(() => {}); shop('/payment-options').then(setOpts).catch(() => {}) }, [])
   // con cuenta, los datos se completan solos y se pueden revisar o cambiar antes de confirmar
   useEffect(() => {
@@ -481,7 +486,7 @@ function Checkout() {
           : <p className="pill bad" style={{ padding: 10, margin: 0 }}>Por ahora no hacemos entregas en {quote.city}. Elegí otra ciudad o retirá en el local.</p>)}
         <div><b>Forma de pago</b>
           <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-            <label className="inline"><input type="radio" style={{ width: 'auto' }} checked={f.pay === 'bancard'} onChange={() => setF({ ...f, pay: 'bancard' })} /> Tarjeta de crédito o débito (pago seguro en línea){opts?.card?.demo ? <span className="pill warn">modo de prueba</span> : null}</label>
+            {opts?.card?.enabled !== false && <label className="inline"><input type="radio" style={{ width: 'auto' }} checked={f.pay === 'bancard'} onChange={() => setF({ ...f, pay: 'bancard' })} /> Tarjeta de crédito o débito (pago seguro en línea){opts?.card?.demo ? <span className="pill warn">modo de prueba</span> : null}</label>}
             {opts?.transfer?.enabled && <label className="inline"><input type="radio" style={{ width: 'auto' }} checked={f.pay === 'transfer'} onChange={() => setF({ ...f, pay: 'transfer' })} /> Transferencia bancaria (subís el comprobante y lo revisamos)</label>}
             {opts?.cod?.enabled && f.method === 'delivery' && <label className="inline"><input type="radio" style={{ width: 'auto' }} checked={f.pay === 'cod'} onChange={() => setF({ ...f, pay: 'cod' })} /> Pago contra entrega (efectivo al recibir)</label>}
           </div></div>

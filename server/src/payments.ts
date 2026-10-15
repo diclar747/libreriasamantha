@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-export const PUBLIC_URL = () => process.env.PUBLIC_URL ?? 'http://localhost:5173'
+export const PUBLIC_URL = () => { const u = (process.env.PUBLIC_URL ?? 'http://localhost:5173').trim().replace(/\/+$/, ''); return /^https?:\/\//i.test(u) ? u : 'https://' + u }
 const mode = () => process.env.BANCARD_MODE ?? 'mock'
 const privateKey = () => process.env.BANCARD_PRIVATE_KEY ?? 'dev-private-key'
 
@@ -38,3 +38,6 @@ export async function createPayment(o: { orderNumber: string; amount: number }) 
 }
 
 export const isMock = () => mode() === 'mock'
+// El pago con tarjeta "simulado" aprueba sin cobrar: en producción solo se habilita con credenciales reales de Bancard
+// (o a propósito, con ALLOW_MOCK_PAYMENTS=1, para una demostración).
+export const cardAvailable = () => !isMock() || process.env.NODE_ENV !== 'production' || process.env.ALLOW_MOCK_PAYMENTS === '1'

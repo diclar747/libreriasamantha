@@ -13,6 +13,7 @@ const METHODS: { key: string; label: string; icon: IconName; detail: string }[] 
   { key: 'transfer', label: 'Transferencia', icon: 'transfer', detail: 'Pago bancario' },
   { key: 'check', label: 'Cheque', icon: 'check', detail: 'Pago con cheque' },
 ]
+const uid = () => (typeof globalThis.crypto?.randomUUID === 'function' ? crypto.randomUUID() : `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`)
 const productIcon = (name: string, service: boolean): IconName => service ? 'print' : /libro|biblia|quijote|lectura/i.test(name) ? 'book' : 'box'
 
 export default function Pos() {
@@ -30,6 +31,8 @@ export default function Pos() {
   const [wo, setWo] = useState<any>(null)
   const [ready, setReady] = useState<any[]>([])
   const [busy, setBusy] = useState(false)
+  const [review, setReview] = useState(false)
+  const saleKey = useRef(uid())
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [activeHeldId, setActiveHeldId] = useState<number | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -140,17 +143,18 @@ export default function Pos() {
     const [svc] = await api('/products?q=IMP-SERV')
     setWo(w); setCart([{ id: svc.id, name: `${w.number} · ${w.description}`, price: Number(w.price), qty: 1, discount: 0, available: 1, service: true }])
   }
-  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); input.current?.focus() }
+  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); setReview(false); saleKey.current = uid(); input.current?.focus() }
 
   async function charge() {
     if (!canCharge) return
+    setReview(false)
     setBusy(true)
     try {
       const payments = Object.entries(pays).filter(([, v]) => Number(v) > 0).map(([method, v]) => ({ method, amount: Number(v) }))
       const s = await api('/sales', {
         body: {
           customerId: customerId ? Number(customerId) : null, onCredit, workOrderId: wo?.id,
-          items: cart.map((l) => ({ productId: l.id, qty: l.qty, discount: l.discount })), payments, discount: globalDisc, discountReason: saleReason || cart.map((l) => l.reason).find(Boolean) || undefined, approvalToken: approval ?? undefined,
+          items: cart.map((l) => ({ productId: l.id, qty: l.qty, discount: l.discount })), payments, discount: globalDisc, discountReason: saleReason || cart.map((l) => l.reason).find(Boolean) || undefined, approvalToken: approval ?? undefined, idempotencyKey: saleKey.current,
         },
       })
       let heldCleanupFailed = false
@@ -251,7 +255,7 @@ export default function Pos() {
             {!onCredit && creditAmount > 0 && cart.length > 0 && <p className="pos-payment-hint">Faltan {gs(creditAmount)} para completar el pago.</p>}
             {change > 0 && !invalidOverpayment && <div className="pos-change"><span>Vuelto en efectivo</span><b>{gs(change)}</b></div>}
           </div>
-          <button className="primary pos-charge" disabled={!canCharge} onClick={charge}><Icon name="tick" size={20} />{busy ? 'Procesando…' : onCredit && creditAmount > 0 ? 'Confirmar venta a crédito' : 'Cobrar venta'}</button>
+          <button className="primary pos-charge" disabled={!canCharge} onClick={() => setReview(true)}><Icon name="tick" size={20} />{busy ? 'Procesando…' : onCredit && creditAmount > 0 ? 'Confirmar venta a crédito' : 'Cobrar venta'}</button>
           <div className="pos-secondary-actions"><button disabled={!cart.length || busy || !!wo} onClick={() => hold('hold')}><Icon name="pause" size={16} /> Suspender</button><button disabled={!cart.length || busy || !!wo} onClick={() => hold('quote')}><Icon name="receipt" size={16} /> Presupuesto</button></div>
         </section>
       </div>
@@ -275,6 +279,19 @@ export default function Pos() {
         <div className="warnbox">{auth.message}</div><p className="muted">Un responsable (administrador) ingresa su usuario y contraseña. Queda registrado quién autorizó y por qué.</p>
         <div className="form"><Field label="Usuario del responsable"><input autoFocus value={auth.username} onChange={(e) => setAuth({ ...auth, username: e.target.value })} /></Field><Field label="Contraseña"><input type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} /></Field>
           <Field label="Motivo" span={2}><input value={saleReason} onChange={(e) => setSaleReason(e.target.value)} placeholder="Motivo del descuento" /></Field></div></Modal>}
+      {review && <Modal title="Confirmá la venta" wide onClose={() => setReview(false)} footer={<><button onClick={() => setReview(false)}>Volver</button><button className="primary" disabled={busy || !canCharge} onClick={charge}>{busy ? 'Procesando…' : 'Confirmar y cobrar'}</button></>}>
+        <div className="table-wrap"><table><thead><tr><th>Producto</th><th className="num">Cant.</th><th className="num">Precio</th><th className="num">Desc.</th><th className="num">Total</th></tr></thead>
+          <tbody>{cart.map((l) => <tr key={l.id}><td>{l.name}</td><td className="num">{l.qty}</td><td className="num">{gs(l.price)}</td><td className="num">{l.discount ? '− ' + gs(l.discount) : '—'}</td><td className="num">{gs(l.price * l.qty - l.discount)}</td></tr>)}</tbody></table></div>
+        <dl className="dl" style={{ marginTop: 12 }}>
+          {globalDisc > 0 && <div><dt>Descuento general</dt><dd>− {gs(globalDisc)}</dd></div>}
+          {wo && Number(wo.deposit) > 0 && <div><dt>Anticipo ya cobrado</dt><dd>− {gs(wo.deposit)}</dd></div>}
+          <div><dt>Total a cobrar</dt><dd><b>{gs(due)}</b></dd></div>
+          {METHODS.filter(({ key }) => key in pays && Number(pays[key]) > 0).map(({ key, label }) => <div key={key}><dt>{label} recibido</dt><dd>{gs(Number(pays[key]))}</dd></div>)}
+          {change > 0 && <div><dt>Vuelto en efectivo</dt><dd><b>{gs(change)}</b></dd></div>}
+          {onCredit && creditAmount > 0 && <div><dt>A crédito{selectedCustomer ? ' · ' + selectedCustomer.name : ''}</dt><dd><b>{gs(creditAmount)}</b></dd></div>}
+          <div><dt>Cliente</dt><dd>{selectedCustomer?.name ?? 'Consumidor final'}</dd></div>
+        </dl>
+        <p className="muted">Revisá los datos: al confirmar se registra la venta y se descuenta el stock.</p></Modal>}
       {confirmCancel && <div className="pos-dialog-backdrop"><div className="pos-dialog card" role="dialog" aria-modal="true" aria-labelledby="pos-cancel-title"><span className="pos-dialog-icon"><Icon name="trash" size={23} /></span><h2 id="pos-cancel-title">¿Cancelar esta venta?</h2><p>Se quitarán los {units} {units === 1 ? 'producto' : 'productos'} del carrito y los importes cargados. La venta todavía no fue registrada.</p><div><button ref={cancelBack} onClick={() => { setConfirmCancel(false); cancelTrigger.current?.focus() }}>Seguir vendiendo</button><button className="danger" onClick={() => { reset(); toast('Venta actual cancelada') }}>Sí, cancelar venta</button></div></div></div>}
       {cart.length > 0 && <a href="#cart" className="pos-bar"><span>{units} {units === 1 ? 'artículo' : 'artículos'}</span><b>{gs(total)}</b><span>Ver carrito ›</span></a>}
     </>

@@ -9,7 +9,7 @@ import { sortCategories } from './categories.js'
 import { couponFor, createOrder, orderInput } from './orders.js'
 import { flowFor, stageOf, STAGE_TEXT } from './orderflow.js'
 import { notify } from './notifications.js'
-import { PUBLIC_URL } from './payments.js'
+import { PUBLIC_URL, cardAvailable } from './payments.js'
 import { availability, effectivePrice } from './pricing.js'
 import { createWorkOrder } from './routes/workorders.js'
 import { getSetting } from './services.js'
@@ -252,7 +252,7 @@ const TOOLS: Record<string, { schema: z.ZodTypeAny; run: (ctx: Ctx, a: any) => P
         delivery: cfg.enabled ? { tarifa_general: cfg.baseFee, texto: `Se cobra ${gs(cfg.baseFee)} en cualquier ciudad que no tenga tarifa propia.`, plazo_general: cfg.defaultEta, promocion_delivery_gratis: promoActive(cfg) ? { desde_compra: cfg.freeFrom, hasta: cfg.promoEnd } : null,
           ciudades_con_tarifa_propia_o_regla: own.map((c) => ({ ciudad: c.name, departamento: c.department, costo: c.price != null ? Number(c.price) : 'tarifa general', plazo: c.eta, gratis: c.free_mode === 'always' ? 'siempre' : c.free_mode === 'amount' ? `desde ${gs(Number(c.free_from))}` : c.free_mode === 'never' ? 'no aplica la promoción' : null })),
           ciudades_sin_delivery: off.map((c) => c.name) } : { pausado: true, texto: 'El delivery está pausado por ahora: solo retiro en el local.' },
-        formas_de_pago: [{ id: 'bancard', texto: PAY_LABEL.bancard }, ...(banks.length ? [{ id: 'transfer', texto: PAY_LABEL.transfer, bancos: banks.map((b) => b.bank_name) }] : []), ...(ctx.shop.codEnabled ? [{ id: 'cod', texto: PAY_LABEL.cod + ' (solo delivery)' }] : [])],
+        formas_de_pago: [...(cardAvailable() ? [{ id: 'bancard', texto: PAY_LABEL.bancard }] : []), ...(banks.length ? [{ id: 'transfer', texto: PAY_LABEL.transfer, bancos: banks.map((b) => b.bank_name) }] : []), ...(ctx.shop.codEnabled ? [{ id: 'cod', texto: PAY_LABEL.cod + ' (solo delivery)' }] : [])],
         reserva_de_stock: { tarjeta_minutos: ctx.shop.reserveMinutes ?? 30, transferencia_horas: ctx.shop.transferReserveHours ?? 24 },
       }
       if (a.city) {

@@ -4,7 +4,7 @@ import fastifyStatic from '@fastify/static'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZodError, z } from 'zod'
-import { ROLES, authenticate, can, hashPassword, newToken, requirePerm, verifyPassword } from './auth.js'
+import { ROLES, authenticate, can, clientIp, hashPassword, isDefaultPassword, loginBlocked, loginFailed, loginOk, newToken, requirePerm, verifyPassword } from './auth.js'
 import { HttpError, type Db } from './db/client.js'
 import { catalogRoutes, imageRoutes } from './routes/catalog.js'
 import { purchasingRoutes } from './routes/purchasing.js'
@@ -33,6 +33,15 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
   const logger = process.env.NODE_ENV !== 'test'
   const app = (opts.https ? Fastify({ logger, https: opts.https }) : Fastify({ logger })) as unknown as FastifyInstance
   app.register(cors, { origin: true })
+  // Cabeceras de seguridad. La cámara se permite solo a la propia app (escáner de códigos).
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('X-Frame-Options', 'SAMEORIGIN')
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    reply.header('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()')
+    if (req.headers['x-forwarded-proto'] === 'https' || opts.https) reply.header('Strict-Transport-Security', 'max-age=15552000')
+    if (req.url.startsWith('/api/') && !reply.hasHeader('cache-control')) reply.header('Cache-Control', 'no-store')
+  })
 
   app.setErrorHandler((err: any, _req, reply) => {
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message })
@@ -45,13 +54,17 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
 
   app.register(async (api) => {
     api.post('/login', async (req) => {
-      const b = z.object({ username: z.string(), password: z.string() }).parse(req.body)
+      const b = z.object({ username: z.string().max(80), password: z.string().max(200) }).parse(req.body)
+      const ip = clientIp(req)
+      loginBlocked(ip, b.username)
       const { rows } = await db.query('SELECT * FROM users WHERE username = $1 AND active', [b.username])
-      if (!rows[0] || !verifyPassword(b.password, rows[0].password_hash)) throw new HttpError(401, 'Usuario o contraseña incorrectos')
+      if (!rows[0] || !verifyPassword(b.password, rows[0].password_hash)) { loginFailed(ip, b.username); throw new HttpError(401, 'Usuario o contraseña incorrectos') }
+      loginOk(ip, b.username)
       const token = newToken()
-      await db.query('INSERT INTO sessions (token, user_id) VALUES ($1,$2)', [token, rows[0].id])
+      const mustChange = isDefaultPassword(b.password)
+      await db.query('INSERT INTO sessions (token, user_id, must_change) VALUES ($1,$2,$3)', [token, rows[0].id, mustChange])
       const { id, username, name, role } = rows[0]
-      return { token, user: { id, username, name, role } }
+      return { token, user: { id, username, name, role, mustChange } }
     })
 
     // Rutas públicas (tienda, chat, webhooks): sin sesión de usuario.

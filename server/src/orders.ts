@@ -9,7 +9,7 @@ import { moveStock } from './stock.js'
 import { netCost } from './pricing.js'
 import { logOrder, notifyCustomer } from './orderflow.js'
 import { HttpError, withTx, type Db, type Tx } from './db/client.js'
-import { buildConfirmation, createPayment, isMock, verifyConfirmation, type Confirmation } from './payments.js'
+import { buildConfirmation, cardAvailable, createPayment, isMock, verifyConfirmation, type Confirmation } from './payments.js'
 import { createWorkOrder } from './routes/workorders.js'
 import { voidSale } from './routes/sales.js'
 import { checkReplenishment, createInvoice, enqueue, getSetting, submitInvoice } from './services.js'
@@ -33,6 +33,7 @@ export type OrderInput = z.infer<typeof orderInput>
 export async function createOrder(db: Db, rawInput: z.input<typeof orderInput>, channel: 'web' | 'whatsapp' = 'web', opts: { accountId?: number } = {}) {
   const input = orderInput.parse(rawInput)
   const shop = await getSetting(db, 'shop')
+  if (input.paymentMethod === 'bancard' && !cardAvailable()) throw new HttpError(409, 'El pago con tarjeta todavía no está habilitado. Elegí transferencia bancaria o pago contra entrega.')
   if (input.paymentMethod === 'cod' && !shop.codEnabled) throw new HttpError(400, 'El pago contra entrega no está habilitado')
   if (input.paymentMethod === 'cod' && input.delivery.method !== 'delivery') throw new HttpError(400, 'El pago contra entrega es solo para delivery')
   // Un reintento (doble clic, reenvío) devuelve el mismo pedido en vez de crear otro.
@@ -132,6 +133,7 @@ export async function couponFor(q: Db | Tx, code: string, subtotal: number, lock
 export async function startPayment(db: Db, orderId: number) {
   const { rows } = await db.query('SELECT * FROM orders WHERE id = $1', [orderId])
   const o = rows[0]
+  if (!cardAvailable()) throw new HttpError(409, 'El pago con tarjeta todavía no está habilitado')
   const p = await createPayment({ orderNumber: o.number, amount: Number(o.total) })
   await db.query('INSERT INTO payment_attempts (order_id, provider, provider_ref, amount) VALUES ($1,$2,$3,$4)', [orderId, p.provider, p.ref, o.total])
   return p
@@ -339,7 +341,7 @@ export function shopRoutes(app: FastifyInstance, db: Db) {
     return { ...rows[0], mock: isMock() }
   })
   app.post('/pay/:ref/simulate', async (req) => {
-    if (!isMock()) throw new HttpError(404, 'No disponible')
+    if (!isMock() || !cardAvailable()) throw new HttpError(404, 'No disponible')
     const { approved } = z.object({ approved: z.boolean() }).parse(req.body)
     const { rows } = await db.query('SELECT amount FROM payment_attempts WHERE provider_ref = $1', [(req.params as any).ref])
     if (!rows[0]) throw new HttpError(404, 'Pago no encontrado')
