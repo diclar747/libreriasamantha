@@ -60,3 +60,55 @@ export async function onlineProductsReport(ctx: Ctx): Promise<ReportResult> {
     columns: [{ key: 'category', label: 'Categoría', type: 'text' }, { key: 'code', label: 'Código', type: 'text' }, { key: 'product', label: 'Producto', type: 'text' }, { key: 'units', label: 'Unidades', type: 'int' }, { key: 'amount', label: 'Importe', type: 'money' }],
     rows, totals: { category: 'Total', ...sumBy(rows, ['units', 'amount']) } }
 }
+
+const PAY_METHOD: Record<string, string> = { bancard: 'Tarjeta en línea', transfer: 'Transferencia', cod: 'Contra entrega' }
+
+// Una fila por pedido con TODOS los datos del cliente y de la entrega: sirve para imprimir listas de reparto o exportar a Excel.
+export async function onlineShippingReport(ctx: Ctx): Promise<ReportResult> {
+  const f = ctx.filters
+  const p = new Params()
+  const w: string[] = [`local_date(o.created_at) BETWEEN ${p.add(f.from)}::date AND ${p.add(f.to)}::date`]
+  if (f.status) w.push(`o.status = ${p.add(f.status)}`)
+  if (f.collection) w.push(`o.payment_status = ${p.add(f.collection)}`)
+  if (f.condition) w.push(`o.delivery_status = ${p.add(f.condition)}`)
+  if (f.method) w.push(`o.delivery_method = ${p.add(f.method)}`)
+  if (f.q) { const q = p.add(`%${f.q}%`); w.push(`(o.number ILIKE ${q} OR o.customer_name ILIKE ${q} OR o.phone ILIKE ${q} OR o.ruc ILIKE ${q} OR o.billing_ruc ILIKE ${q} OR o.city_name ILIKE ${q} OR o.address ILIKE ${q})`) }
+  const { rows } = await ctx.db.query(
+    `SELECT o.id, o.number, o.created_at, o.customer_name, o.phone, o.email, COALESCE(o.billing_ruc, o.ruc) AS doc, COALESCE(o.billing_name, o.customer_name) AS billing_name,
+       o.delivery_method, o.address, o.neighborhood, o.department, o.city_name, o.address_reference, o.recipient_name, o.recipient_phone, o.customer_note,
+       (SELECT string_agg(oi.qty || ' × ' || oi.name, '; ' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id = o.id) AS products,
+       (SELECT COALESCE(SUM(oi.qty), 0)::int FROM order_items oi WHERE oi.order_id = o.id) AS units,
+       o.delivery_fee, o.total, o.payment_method, o.payment_status, o.delivery_status, o.status
+     FROM orders o WHERE ${w.join(' AND ')} ORDER BY o.created_at DESC LIMIT 20000`, p.vals)
+  const join = (...x: unknown[]) => x.filter((v) => v !== null && v !== undefined && String(v).trim() !== '').join(', ')
+  const out = rows.map((r) => ({ ...r, delivery_method: r.delivery_method === 'pickup' ? 'Retiro en local' : 'Delivery',
+    place: join(r.city_name, r.department && r.department !== r.city_name ? r.department : null),
+    full_address: r.delivery_method === 'pickup' ? '' : join(r.address, r.neighborhood, r.address_reference && 'Ref.: ' + r.address_reference),
+    pay: `${PAY_METHOD[r.payment_method] ?? r.payment_method} · ${PAY[r.payment_status] ?? r.payment_status}`,
+    delivery_status: r.status === 'cancelled' ? 'Cancelado' : DEL[r.delivery_status] ?? r.delivery_status,
+    recipient: r.recipient_name ? `${r.recipient_name}${r.recipient_phone ? ' · ' + r.recipient_phone : ''}` : '' }))
+  return { id: 'online-shipping', title: 'Pedidos en línea — datos del cliente y envío', subtitle: `Del ${f.from} al ${f.to}`,
+    columns: [{ key: 'number', label: 'Pedido', type: 'text' }, { key: 'created_at', label: 'Fecha', type: 'datetime' }, { key: 'customer_name', label: 'Cliente', type: 'text' }, { key: 'phone', label: 'Teléfono', type: 'text' }, { key: 'email', label: 'Correo', type: 'text' },
+      { key: 'doc', label: 'RUC / CI', type: 'text' }, { key: 'billing_name', label: 'Facturar a', type: 'text' }, { key: 'delivery_method', label: 'Entrega', type: 'text' }, { key: 'place', label: 'Ciudad', type: 'text' },
+      { key: 'full_address', label: 'Dirección', type: 'text' }, { key: 'recipient', label: 'Recibe', type: 'text' }, { key: 'products', label: 'Productos', type: 'text' }, { key: 'units', label: 'Unid.', type: 'int' },
+      { key: 'delivery_fee', label: 'Delivery', type: 'money' }, { key: 'total', label: 'Total', type: 'money' }, { key: 'pay', label: 'Pago', type: 'text' }, { key: 'delivery_status', label: 'Estado', type: 'text' }, { key: 'customer_note', label: 'Nota del cliente', type: 'text' }],
+    rows: out, totals: { number: `${out.length} pedidos`, ...sumBy(out, ['units', 'delivery_fee', 'total']) } }
+}
+
+// Delivery cobrado y no cobrado (promociones) por ciudad, departamento o período, con la tarifa que se aplicó en cada pedido.
+export async function deliveryReport(ctx: Ctx): Promise<ReportResult> {
+  const f = ctx.filters
+  const g = f.groupBy ?? 'city'
+  const expr = g === 'department' ? `COALESCE(o.department, '—')` : g === 'day' ? `to_char(local_date(o.created_at), 'YYYY-MM-DD')` : g === 'month' ? `to_char(local_date(o.created_at), 'YYYY-MM')` : `COALESCE(o.city_name, '—')`
+  const { rows } = await ctx.db.query(
+    `SELECT ${expr} AS grp, ${g === 'city' ? `COALESCE(o.department, '—')` : `''`} AS department, COUNT(*)::int AS orders, COALESCE(SUM(o.delivery_fee), 0)::bigint AS charged,
+       COALESCE(SUM(COALESCE(o.delivery_base_fee, o.delivery_fee)), 0)::bigint AS base_total, COUNT(*) FILTER (WHERE o.delivery_fee = 0)::int AS free_orders,
+       COALESCE(SUM(COALESCE(o.delivery_base_fee, o.delivery_fee) - o.delivery_fee), 0)::bigint AS forgone, COALESCE(SUM(o.subtotal), 0)::bigint AS products, COALESCE(SUM(o.total), 0)::bigint AS total
+     FROM orders o WHERE o.delivery_method = 'delivery' AND o.status <> 'cancelled' AND local_date(o.created_at) BETWEEN $1::date AND $2::date
+     GROUP BY 1, 2 ORDER BY ${g === 'day' || g === 'month' ? '1' : 'orders DESC, 1'}`, [f.from, f.to])
+  const cols: any[] = [{ key: 'grp', label: g === 'department' ? 'Departamento' : g === 'day' ? 'Día' : g === 'month' ? 'Mes' : 'Ciudad', type: 'text' }]
+  if (g === 'city') cols.push({ key: 'department', label: 'Departamento', type: 'text' })
+  cols.push({ key: 'orders', label: 'Pedidos', type: 'int' }, { key: 'products', label: 'Productos', type: 'money' }, { key: 'charged', label: 'Delivery cobrado', type: 'money' }, { key: 'free_orders', label: 'Con delivery gratis', type: 'int' },
+    { key: 'forgone', label: 'No cobrado por promoción', type: 'money' }, { key: 'total', label: 'Total vendido', type: 'money' })
+  return { id: 'delivery', title: 'Delivery por ciudad', subtitle: `Del ${f.from} al ${f.to}`, groupBy: g, columns: cols, rows, totals: { grp: 'Total', ...sumBy(rows, ['orders', 'products', 'charged', 'free_orders', 'forgone', 'total']) } }
+}

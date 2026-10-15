@@ -6,7 +6,7 @@ import { applyPermissions, parseFilters, type Ctx, type Filters, type ReportResu
 import { buildCsv, buildPdf, buildXlsx, pickColumns } from './export.js'
 import { expensesReport } from './expenses.js'
 import { cashSessionsReport, cashflowReport, movementsReport, paymentsReport } from './money.js'
-import { onlineProductsReport, onlineReport } from './online.js'
+import { deliveryReport, onlineProductsReport, onlineReport, onlineShippingReport } from './online.js'
 import { overviewReport } from './overview.js'
 import { customerStatementReport, receivablesReport } from './receivables.js'
 import { balanceSheetReport, incomeStatementReport } from './results.js'
@@ -38,6 +38,10 @@ export const REPORTS: ReportDef[] = [
   { id: 'online', title: 'Tienda online', group: 'Ventas y cobros', perms: ['reports.view', 'orders.manage'], run: onlineReport,
     groups: G({ status: 'Estado del pedido', payment: 'Estado del pago', delivery: 'Estado de entrega', day: 'Día', month: 'Mes', coupon: 'Cupón', city: 'Ciudad / entrega' }),
     filters: ['period', 'orderStatus', 'paymentStatus', 'deliveryStatus', 'deliveryMethod', 'q'] },
+  { id: 'online-shipping', title: 'Pedidos en línea — datos del cliente y envío', group: 'Ventas y cobros', perms: ['reports.view', 'orders.manage'], run: onlineShippingReport,
+    filters: ['period', 'orderStatus', 'paymentStatus', 'deliveryStatus', 'deliveryMethod', 'q'] },
+  { id: 'delivery', title: 'Delivery por ciudad', group: 'Ventas y cobros', perms: ['reports.view', 'delivery.view'], run: deliveryReport,
+    groups: G({ city: 'Ciudad', department: 'Departamento', day: 'Día', month: 'Mes' }), filters: ['period'] },
   { id: 'online-products', title: 'Tienda online — productos vendidos', group: 'Ventas y cobros', perms: ['reports.view'], run: onlineProductsReport, filters: ['period'] },
   { id: 'movements', title: 'Movimientos de dinero', group: 'Dinero y caja', perms: ['reports.view'], run: movementsReport, views: true,
     groups: G({ day: 'Día', month: 'Mes', category: 'Categoría', kind: 'Tipo de movimiento', method: 'Medio de pago', account: 'Cuenta / caja', user: 'Responsable' }),

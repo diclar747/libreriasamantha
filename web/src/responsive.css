@@ -140,7 +140,14 @@ textarea { font: inherit; }
 }
 
 /* ---- Impresión (comprobantes) */
-@media print { .topbar, .bottombar, .pos-bar, .offline { display: none !important; } .shell { display: block; } }
+@media print {
+  .topbar, .bottombar, .pos-bar, .offline, .side, nav.side, .no-print, .toast { display: none !important; }
+  .shell { display: block; } .main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .report-layout { display: block !important; } .report-nav { display: none !important; }
+  .card { box-shadow: none !important; border: 0 !important; padding: 0 !important; background: none !important; }
+  .table-wrap { overflow: visible !important; } table { font-size: 8px !important; width: 100% !important; } th, td { padding: 2px 3px !important; white-space: normal !important; word-break: break-word; } td.money, th.money { white-space: nowrap !important; } .pager { display: none !important; }
+  body { background: #fff !important; } @page { size: A4 landscape; margin: 10mm; }
+}
 
 .pop-head button, .notif { min-height: 0; }
 .pop-head button { padding: 6px 10px; font-size: 13px; }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, gs, useApp } from '../api'
+import { printOrders, type PrintFormat } from '../printOrders'
 import { EmptyRow, Field, fmtDate, fmtDateTime, Kpi, Modal, Money, Pager, plusDays, qs, Status, Tabs, today, useAsk, useDebounced, useQuery } from '../ui'
 
 type Tab = 'pedidos' | 'comprobantes' | 'devoluciones' | 'metricas' | 'entrega' | 'cupones'
@@ -43,9 +44,10 @@ function OrderDetail({ id, onClose, onChange }: { id: number; onClose: () => voi
     if (canPrepare && ds === 'incident') btns.push(['resume', 'Reprogramar / retomar', () => move(o.dispatched_at ? 'dispatched' : o.ready_at ? 'ready' : 'preparing'), 'primary'])
     if (['pending', 'preparing', 'ready'].includes(ds) || (ds === 'incident' && !o.dispatched_at)) btns.push(['cancel', 'Cancelar pedido', async () => { const reason = await ask({ title: 'Cancelar el pedido', reason: true, confirm: 'Cancelar pedido', danger: true }); if (reason) act(() => api(`/orders/${id}/cancel`, { body: { reason } }), 'Pedido cancelado') }, 'danger'])
   }
+  const doPrint = (fmt: PrintFormat) => printOrders([id], fmt).catch((e) => toast(e.message, true))
   const flowIdx = o.flow.findIndex((s: any) => s.stage === o.stage)
   return (
-    <Modal title={`Pedido ${o.number} · ${o.customer_name}`} onClose={onClose} wide="xl" footer={<>{btns.map(([k, l, fn, cls]) => <button key={k} className={cls} onClick={fn}>{l}</button>)}<button onClick={onClose}>Cerrar</button></>}>
+    <Modal title={`Pedido ${o.number} · ${o.customer_name}`} onClose={onClose} wide="xl" footer={<>{btns.map(([k, l, fn, cls]) => <button key={k} className={cls} onClick={fn}>{l}</button>)}<button onClick={() => doPrint('label')}>🖨 Etiqueta de envío</button><button onClick={() => doPrint('sheet')}>🖨 Ficha A4</button><button onClick={onClose}>Cerrar</button></>}>
       {o.late && <div className="warnbox">⏱ Este pedido supera el tiempo configurado de preparación o entrega.</div>}
       {o.exception && <div className="errbox"><b>Excepción:</b> {o.exception}</div>}
       {o.cancel_requested_at && o.status !== 'cancelled' && <div className="warnbox">El cliente pidió cancelar: “{o.cancel_request_reason}”. <button className="small primary" onClick={() => act(() => api(`/orders/${id}/cancel-request/resolve`, { body: { approve: true, response: 'Aceptado' } }), 'Pedido cancelado')}>Aceptar</button> <button className="small" onClick={async () => { const response = await ask({ title: 'Rechazar la cancelación', reason: true, confirm: 'Rechazar' }); if (response) act(() => api(`/orders/${id}/cancel-request/resolve`, { body: { approve: false, response } }), 'Respondido') }}>Rechazar</button></div>}
@@ -210,7 +212,7 @@ function Coupons() {
 }
 
 export default function Orders() {
-  const { user } = useApp()
+  const { user, toast } = useApp()
   const [sp, setSp] = useSearchParams()
   const tab = (sp.get('tab') as Tab) || 'pedidos'
   const [f, setF] = useState<any>({ q: '', stage: '', payment: '', method: '', payMethod: '', assigned: '', from: '', to: '', todo: sp.get('todo') ?? '', late: '' })
@@ -221,11 +223,15 @@ export default function Orders() {
   const counters = useQuery<any>('/orders/counters')
   const staff = useQuery<any[]>('/orders-staff')
   const [open, setOpen] = useState<number | null>(null)
+  const [sel, setSel] = useState<number[]>([])
   const admin = ['owner', 'admin'].includes(user!.role)
   const refresh = () => { list.reload(); counters.reload() }
   useEffect(() => { const t = setInterval(() => { if (tab === 'pedidos') list.reload(); counters.reload() }, 20000); return () => clearInterval(t) }, [tab])
   const set = (k: string) => (e: any) => { setF({ ...f, [k]: e.target.value }); setPage(1) }
   const c = counters.data
+  const items: any[] = list.data?.items ?? []
+  const printSel = (ids: number[], fmt: PrintFormat) => printOrders(ids, fmt).catch((e) => toast(e.message, true))
+  const printAllTodo = async (fmt: PrintFormat) => { try { const r = await api('/orders?' + qs({ todo: '1', method: 'delivery', page: 1, pageSize: 100 })); if (!r.items.length) return toast('No hay pedidos de delivery por preparar o entregar', true); await printOrders(r.items.map((x: any) => x.id), fmt) } catch (e: any) { toast(e.message, true) } }
   const chip = (label: string, n: number | undefined, patch: any, tone?: string) => <button className={'card kpi'} style={{ textAlign: 'left', cursor: 'pointer', minHeight: 0, padding: '12px 16px' }} onClick={() => { setSp({ tab: 'pedidos' }); setF({ ...f, q: '', stage: '', payment: '', todo: '', late: '', ...patch }); setPage(1) }}><div className="label">{label}</div><div className="value" style={tone && n ? { color: `var(--${tone})` } : undefined}>{n ?? '…'}</div></button>
   return (
     <>
@@ -244,12 +250,18 @@ export default function Orders() {
           <Field label="Desde"><input type="date" value={f.from} onChange={set('from')} /></Field><Field label="Hasta"><input type="date" value={f.to} onChange={set('to')} /></Field>
           <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={!!f.todo} onChange={(e) => { setF({ ...f, todo: e.target.checked ? '1' : '' }); setPage(1) }} /> Por preparar o entregar</label>
           <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={!!f.late} onChange={(e) => { setF({ ...f, late: e.target.checked ? '1' : '' }); setPage(1) }} /> Con demora</label></div>
-        <div className="table-wrap"><table><thead><tr><th>Pedido</th><th>Cliente</th><th className="num">Prod.</th><th className="num">Total</th><th>Estado</th><th>Pago</th><th>Entrega</th><th>Responsable</th></tr></thead>
-          <tbody>{(list.data?.items ?? []).map((o: any) => <tr key={o.id} className="clickable" onClick={() => setOpen(o.id)}><td><b>{o.number}</b><div className="muted">{fmtDateTime(o.created_at)}</div></td><td>{o.customer_name}<div className="muted">{o.phone}</div></td><td className="num">{o.units}</td><td className="num">{gs(o.total)}</td>
+        <div className="row no-print" style={{ margin: '4px 0 10px', flexWrap: 'wrap' }}>
+          <b>Imprimir:</b>
+          <button disabled={!sel.length} onClick={() => printSel(sel, 'label')}>🖨 Etiquetas de envío ({sel.length})</button>
+          <button disabled={!sel.length} onClick={() => printSel(sel, 'sheet')}>🖨 Fichas A4 ({sel.length})</button>
+          <button onClick={() => printAllTodo('label')}>🖨 Etiquetas de todos los delivery por entregar</button>
+          <span className="muted">Marcá los pedidos con la casilla, o abrí uno para imprimirlo solo.</span></div>
+        <div className="table-wrap"><table><thead><tr><th><input type="checkbox" style={{ width: 'auto' }} aria-label="Elegir todos" checked={items.length > 0 && sel.length === items.length} onChange={(e) => setSel(e.target.checked ? items.map((x) => x.id) : [])} /></th><th>Pedido</th><th>Cliente</th><th className="num">Prod.</th><th className="num">Total</th><th>Estado</th><th>Pago</th><th>Entrega</th><th>Responsable</th></tr></thead>
+          <tbody>{(list.data?.items ?? []).map((o: any) => <tr key={o.id} className="clickable" onClick={() => setOpen(o.id)}><td onClick={(e) => e.stopPropagation()}><input type="checkbox" style={{ width: 'auto' }} aria-label={`Elegir ${o.number}`} checked={sel.includes(o.id)} onChange={(e) => setSel(e.target.checked ? [...sel, o.id] : sel.filter((x) => x !== o.id))} /></td><td><b>{o.number}</b><div className="muted">{fmtDateTime(o.created_at)}</div></td><td>{o.customer_name}<div className="muted">{o.phone}</div></td><td className="num">{o.units}</td><td className="num">{gs(o.total)}</td>
             <td><span className={'pill ' + (STAGE_KIND[o.stage] ?? '')}>{o.stage_label}</span>{o.late && <span className="pill bad" style={{ marginLeft: 4 }} title="Con demora">⏱</span>}{o.cancel_requested_at && o.status !== 'cancelled' && <span className="pill warn" style={{ marginLeft: 4 }}>pide cancelar</span>}{o.open_returns > 0 && <span className="pill warn" style={{ marginLeft: 4 }}>devolución</span>}</td>
             <td><span className={'pill ' + PAY_KIND[o.payment_status]}>{PAY[o.payment_status]}</span><div className="muted">{o.payment_method === 'transfer' ? 'Transferencia' : o.payment_method === 'cod' ? 'Contra entrega' : 'Tarjeta'}</div></td>
-            <td>{o.delivery_method === 'pickup' ? 'Retiro en local' : `Delivery · ${o.city_name ?? ''}`}</td><td>{o.assigned_name ?? <span className="muted">—</span>}</td></tr>)}
-            {!list.data?.items?.length && <EmptyRow cols={8} text="No hay pedidos con estos filtros" />}</tbody></table></div>
+            <td>{o.delivery_method === 'pickup' ? 'Retiro en local' : <>Delivery · {o.city_name ?? ''}<div className="muted">{[o.address, o.neighborhood].filter(Boolean).join(', ')}</div></>}</td><td>{o.assigned_name ?? <span className="muted">—</span>}</td></tr>)}
+            {!list.data?.items?.length && <EmptyRow cols={9} text="No hay pedidos con estos filtros" />}</tbody></table></div>
         {list.data && <Pager page={list.data.page} pages={list.data.pages} total={list.data.total} pageSize={pageSize} onPage={setPage} onSize={(s) => { setPageSize(s); setPage(1) }} />}</div>}
       {tab === 'comprobantes' && <Proofs onChange={refresh} />}
       {tab === 'devoluciones' && <Returns onChange={refresh} />}

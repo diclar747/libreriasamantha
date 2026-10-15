@@ -75,6 +75,7 @@ export default function Reports() {
   const [pageSize, setPageSize] = useState(15)
   const [cols, setCols] = useState<string[] | null>(null)
   const [showCols, setShowCols] = useState(false)
+  const [printAll, setPrintAll] = useState(false) // al imprimir se traen TODAS las filas, no solo la página visible
 
   const id = routeId ?? sp.get('report') ?? 'sales'
   const def = catalog.find((d) => d.id === id)
@@ -97,16 +98,23 @@ export default function Reports() {
   }, [def?.id])
 
   const params = useMemo(() => {
-    const p: Record<string, any> = { ...f, q: q || undefined, page, pageSize, cols: undefined }
+    const p: Record<string, any> = { ...f, q: q || undefined, page: printAll ? 1 : page, pageSize: printAll ? 'all' : pageSize, cols: undefined }
     if (range !== 'custom') { delete p.from; delete p.to; p.range = range }
     return p
-  }, [f, q, page, pageSize, range])
+  }, [f, q, page, pageSize, range, printAll])
   useEffect(() => {
     if (!def) return
     setLoading(true)
     api('/reports/' + id + '?' + qs(params)).then((r) => { setRes(r); setCols(null) }).catch((e) => toast(e.message, true)).finally(() => setLoading(false))
   }, [id, def?.id, JSON.stringify(params)])
 
+  useEffect(() => {
+    if (!printAll || loading || !res) return
+    const done = () => { setPrintAll(false); window.removeEventListener('afterprint', done) }
+    window.addEventListener('afterprint', done)
+    const t = setTimeout(() => window.print(), 250)
+    return () => clearTimeout(t)
+  }, [printAll, loading, res])
   const set = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(sp)
     for (const [k, v] of Object.entries(patch)) { if (v === undefined || v === '') next.delete(k); else next.set(k, v) }
@@ -131,7 +139,7 @@ export default function Reports() {
       <div className="head"><div><h1>Reportes</h1><span className="muted">{res?.title ?? 'Ventas, caja, compras, deudas e inventario'} {res?.subtitle ? `· ${res.subtitle}` : ''}</span></div>
         <div className="row no-print">
           {res?.canExport && <><button onClick={() => exportAs('xlsx')}>Excel</button><button onClick={() => exportAs('pdf')}>PDF</button><button onClick={() => exportAs('csv')}>CSV</button></>}
-          <button onClick={() => window.print()}>Imprimir</button>
+          <button onClick={() => setPrintAll(true)}>Imprimir</button>
         </div>
       </div>
 

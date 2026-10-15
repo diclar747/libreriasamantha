@@ -98,6 +98,19 @@ export function orderAdminRoutes2(app: FastifyInstance, db: Db) {
     return { from, to, ...rows[0], sales: Number(rows[0].sales), stages, late: open.filter((o) => decorateOrder(o, shop).late).length, returns: rets[0].n }
   })
 
+  // Datos completos para imprimir etiquetas / fichas de envío (uno o varios pedidos a la vez).
+  app.get('/orders/print', async (req) => {
+    perm(req)
+    const ids = [...new Set(String((req.query as any).ids ?? '').split(',').map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 100)
+    if (!ids.length) throw new HttpError(400, 'Elegí al menos un pedido')
+    const { rows } = await db.query('SELECT o.*, u.name AS assigned_name FROM orders o LEFT JOIN users u ON u.id = o.assigned_to WHERE o.id = ANY($1) ORDER BY o.id', [ids])
+    const { rows: items } = await db.query('SELECT oi.order_id, oi.name, oi.qty, oi.unit_price, p.code, p.location FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ANY($1) ORDER BY oi.id', [ids])
+    const shop = await getSetting(db, 'shop')
+    const orders = rows.map((o) => { const { lookup_token: _t, ...rest } = o; return { ...rest, items: items.filter((i) => i.order_id === o.id) } })
+    await db.query(`INSERT INTO audit_log (user_id, action, entity, detail) VALUES ($1,'orders.print','order',$2)`, [req.user!.id, JSON.stringify({ ids })])
+    return { shop: { name: shop.name ?? 'Librería Samantha', phone: shop.whatsapp ?? shop.phone ?? null, address: shop.address ?? null, hours: shop.hours ?? null }, orders }
+  })
+
   app.get('/orders/:id', async (req) => {
     perm(req)
     const id = Number((req.params as any).id)
