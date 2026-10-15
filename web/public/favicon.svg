@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><defs>
   <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
-    <stop offset="0" stop-color="#0f1340"/><stop offset=".55" stop-color="#2f38b8"/><stop offset="1" stop-color="#5566ec"/>
+    <stop offset="0" stop-color="#16301f"/><stop offset=".6" stop-color="#25452f"/><stop offset="1" stop-color="#386a4c"/>
   </linearGradient>
   <radialGradient id="glow" cx="48" cy="40" r="30" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#ffd98a" stop-opacity=".6"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+    <stop offset="0" stop-color="#f1cf7a" stop-opacity=".55"/><stop offset="1" stop-color="#f1cf7a" stop-opacity="0"/>
   </radialGradient>
-  <linearGradient id="star" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3cf"/><stop offset="1" stop-color="#f4bf5a"/></linearGradient>
-  <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e6e9ff"/></linearGradient>
+  <linearGradient id="star" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#c9983a"/></linearGradient>
+  <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#efe3c6"/></linearGradient>
 </defs>
   <rect width="96" height="96" rx="26" fill="url(#bg)"/>
   <circle cx="48" cy="40" r="30" fill="url(#glow)"/>
   <path d="M48 72C40 65 28 63 17 66V37c11-3 23-1 31 6z" fill="url(#pg)"/>
   <path d="M48 72c8-7 20-9 31-6V37c-11-3-23-1-31 6z" fill="url(#pg)" opacity=".94"/>
-  <path d="M48 43v29" stroke="#2f38b8" stroke-opacity=".3" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M48 43v29" stroke="#25452f" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round"/>
   <path d="M48 11c1.2 8.2 4.6 11.8 12.6 13C52.6 25.2 49.2 28.8 48 37c-1.2-8.2-4.6-11.8-12.6-13C43.4 22.8 46.8 19.2 48 11z" fill="url(#star)"/>
 </svg>

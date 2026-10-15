@@ -1,7 +1,7 @@
 import { LogoMark } from '../components/Logo'
 import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { gs, useApp } from '../api'
 import { Icon } from '../components/Icons'
 import ThemePicker from '../components/ThemePicker'
@@ -95,6 +95,41 @@ function CartDrawer() {
   )
 }
 
+// Íconos de trazo (24 px) del encabezado, los beneficios y los botones.
+const SF: Record<string, string> = {
+  truck: 'M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19.5a1.5 1.5 0 1 0 0-.01M17 19.5a1.5 1.5 0 1 0 0-.01',
+  card: 'M3 6h18v12H3zM3 10h18M7 15h4',
+  shield: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3zM9 12l2 2 4-4',
+  headset: 'M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v5H5a1 1 0 0 1-1-1v-4zM20 14h-3v5h2a1 1 0 0 0 1-1v-4zM17 19c0 1.5-2 2-5 2',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.5-6 8-6s8 2 8 6',
+  heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  bag: 'M5 8h14l-1 12H6L5 8zM9 8a3 3 0 0 1 6 0',
+  search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
+  tag: 'M3 12V4h8l10 10-8 8L3 12zM7.5 8h.01',
+  chat: 'M4 20l1.3-4A8 8 0 1 1 8.2 18.7L4 20z',
+  insta: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17.5 6.5h.01',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+}
+function SfIcon({ n, size = 22 }: { n: string; size?: number }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={SF[n] ?? SF.bag} /></svg>
+}
+const CAT_SUB: Record<string, string> = {
+  'Biblias': 'Para toda la familia', 'Devocionales': 'Tu tiempo con Dios', 'Niños': 'Libros y recursos', 'Adolescentes': 'Fe para esta etapa', 'Jóvenes': 'Crecer en fe',
+  'Mujeres': 'Palabra y encuentro', 'Hombres': 'Fe y propósito', 'Matrimonios': 'Fortalecé tu hogar', 'Agendas': 'Organizá tu año', 'Libros': 'Autores cristianos',
+  'Regalos': 'Detalles con propósito', 'Útiles escolares': 'Para el colegio', 'Oficina': 'Papelería y más',
+}
+const INSTAGRAM = 'https://www.instagram.com/samanthalatienda/'
+// Catálogo completo en memoria (se refresca cada minuto): lo usan el encabezado y el inicio.
+let allCache: { at: number; p: Promise<any[]> } | null = null
+const loadAll = () => {
+  if (!allCache || Date.now() - allCache.at > 60_000) allCache = { at: Date.now(), p: shop('/products').catch(() => { allCache = null; return [] as any[] }) }
+  return allCache.p
+}
+/** La tienda tiene su propia paleta: se activa con una clase en <html> para que también la tomen el carrito y los diálogos. */
+function useStorefront() {
+  useEffect(() => { document.documentElement.classList.add('storefront'); return () => document.documentElement.classList.remove('storefront') }, [])
+}
+
 function useSeo(title: string, description: string) {
   useEffect(() => {
     document.title = title
@@ -105,36 +140,62 @@ function useSeo(title: string, description: string) {
 }
 
 function Layout({ children }: { children: ReactNode }) {
+  useStorefront()
   const { count, setOpen } = useCart()
   const { profile } = useCustomer()
+  const nav = useNavigate()
+  const loc = useLocation()
+  const [sp] = useSearchParams()
   const [info, setInfo] = useState<any>(null)
-  useEffect(() => { shop('/info').then(setInfo).catch(() => {}) }, [])
+  const [cats, setCats] = useState<any[]>([])
+  const [all, setAll] = useState<any[]>([])
+  const [term, setTerm] = useState('')
+  useEffect(() => { shop('/info').then(setInfo).catch(() => {}); shop('/categories').then(setCats).catch(() => {}); loadAll().then(setAll) }, [])
+  useEffect(() => { setTerm(sp.get('q') ?? '') }, [sp])
   const wa = info?.whatsapp?.replace(/\D/g, '')
+  const isHome = loc.pathname.replace(/\/$/, '') === '/tienda'
+  const curCat = isHome ? sp.get('cat') ?? '' : ''
+  const filtered = isHome && (sp.get('cat') || sp.get('q') || sp.get('oferta'))
+  const hasOffers = all.some((p) => p.on_offer)
+  const account = profile ? '/tienda/cuenta' : '/tienda/ingresar'
   return (
     <div className="st">
-      <div className="st-announcement"><span>Lecturas que inspiran fe ✦</span><span>Comprá en línea · Retirá en el local o recibí tu pedido</span></div>
-      <header className="st-head">
-        <Link to="/tienda" className="st-logo"><LogoMark size={46} /><span><b>Librería</b><strong>Samantha</strong></span></Link>
-        <nav>
-          <NavLink to="/tienda" end>Explorar</NavLink>
-          <Link to="/tienda/listas">Listas escolares</Link>
-          <Link to="/tienda/impresiones">Impresiones</Link>
-          <Link to={profile ? '/tienda/cuenta/pedidos' : '/tienda/pedido'}>Mis pedidos</Link>
+      <div className="sf-util"><span><SfIcon n="truck" size={17} /> Envíos a todo Paraguay</span>
+        <nav aria-label="Más">
+          <Link to="/tienda/listas">Listas escolares</Link><Link to="/tienda/impresiones">Impresiones</Link><Link to={profile ? '/tienda/cuenta/pedidos' : '/tienda/pedido'}>Mis pedidos</Link>
+          {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="sf-soc"><SfIcon n="chat" size={18} /></a>}
+          <a href={INSTAGRAM} target="_blank" rel="noreferrer" aria-label="Instagram" className="sf-soc"><SfIcon n="insta" size={18} /></a>
         </nav>
-        <div className="st-head-actions"><ThemePicker /><Link to={profile ? '/tienda/cuenta' : '/tienda/ingresar'} className="st-login-link"><Icon name="users" size={18} />{profile ? profile.firstName : 'Ingresar'}{profile?.unread > 0 && <b className="acc-badge">{profile.unread}</b>}</Link><button className="st-cart" onClick={() => setOpen(true)} aria-label={`Carrito, ${count} productos`}><span aria-hidden="true">▣</span> Carrito{count > 0 && <b>{count}</b>}</button></div>
+      </div>
+      <header className="sf-head">
+        <Link to="/tienda" className="sf-logo" aria-label="Librería Samantha, inicio"><LogoMark size={52} /><span><strong>Samantha</strong><small>Librería cristiana</small></span></Link>
+        <form className="sf-search" role="search" onSubmit={(e) => { e.preventDefault(); nav(term.trim() ? `/tienda?q=${encodeURIComponent(term.trim())}` : '/tienda') }}>
+          <input aria-label="Buscar productos" placeholder="Buscar libros, Biblias, autores…" value={term} onChange={(e) => setTerm(e.target.value)} />
+          <button aria-label="Buscar"><SfIcon n="search" size={20} /></button>
+        </form>
+        <div className="sf-actions">
+          <Link to={account} className="sf-act"><SfIcon n="user" size={26} /><span>{profile ? profile.firstName : 'Mi cuenta'}</span>{profile?.unread > 0 && <b className="sf-dot">{profile.unread}</b>}</Link>
+          <Link to={profile ? '/tienda/cuenta/favoritos' : '/tienda/ingresar'} className="sf-act"><SfIcon n="heart" size={26} /><span>Favoritos</span></Link>
+          <button className="sf-act sf-cart" onClick={() => setOpen(true)} aria-label={`Carrito, ${count} productos`}><SfIcon n="bag" size={26} /><span>Carrito</span><b className="sf-dot">{count}</b></button>
+        </div>
       </header>
-      <main className="st-main">{children}</main>
+      <nav className="sf-nav" aria-label="Categorías">
+        <Link to="/tienda" className={'sf-nl' + (isHome && !filtered ? ' on' : '')}>Inicio</Link>
+        {cats.filter((c) => c.category !== 'Servicios').map((c) => <Link key={c.category} to={`/tienda?cat=${encodeURIComponent(c.category)}`} className={'sf-nl' + (curCat === c.category ? ' on' : '')}>{c.category}</Link>)}
+        {hasOffers && <Link to="/tienda?oferta=1" className={'sf-nl sf-offers' + (isHome && sp.get('oferta') ? ' on' : '')}><SfIcon n="tag" size={16} /> Ofertas</Link>}
+      </nav>
+      <main className={'st-main' + (isHome ? ' sf-full' : '')}>{children}</main>
       <nav className="st-bottom" aria-label="Tienda">
         <NavLink to="/tienda" end>Productos</NavLink>
         <NavLink to="/tienda/listas">Listas</NavLink>
         <NavLink to="/tienda/impresiones">Impresiones</NavLink>
-        <NavLink to={profile ? '/tienda/cuenta' : '/tienda/ingresar'}>{profile ? 'Mi cuenta' : 'Ingresar'}</NavLink>
+        <NavLink to={account}>{profile ? 'Mi cuenta' : 'Ingresar'}</NavLink>
         <button className="st-bottom-cart" onClick={() => setOpen(true)}>Carrito{count > 0 && <b>{count}</b>}</button>
       </nav>
       <footer className="st-foot">
-        <div className="st-foot-brand"><LogoMark size={48} className="st-foot-mark" /><div><b>{info?.name ?? 'Librería Samantha'}</b><p>Lecturas para acompañar tu camino de fe.</p></div></div>
+        <div className="st-foot-brand"><LogoMark size={52} className="st-foot-mark" /><div><b>{info?.name ?? 'Librería Samantha'}</b><p>Biblias, devocionales y libros para acompañar tu camino de fe. Envíos a todo el país.</p></div></div>
         <div><b>Tu compra</b><Link to="/tienda">Explorar productos</Link><Link to="/tienda/pedido">Seguir mi pedido</Link><Link to="/tienda/listas">Listas escolares</Link>{profile ? <Link to="/tienda/cuenta">Mi cuenta</Link> : <Link to="/tienda/registro">Crear mi cuenta</Link>}<Link to="/admin">Acceso del personal</Link></div>
-        <div><b>Estamos cerca</b><span>{info?.address}</span><span>{info?.hours}</span>{wa && <a href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`}>Escribinos por WhatsApp</a>}</div>
+        <div><b>Contacto</b>{info?.address && <span>{info.address}</span>}{info?.hours && <span>{info.hours}</span>}{wa && <a href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`} target="_blank" rel="noreferrer">Escribinos por WhatsApp</a>}<a href={INSTAGRAM} target="_blank" rel="noreferrer">Seguinos en Instagram</a></div>
       </footer>
       <ChatWidget />
     </div>
@@ -160,55 +221,85 @@ function ProductCard({ p }: { p: any }) {
       {p.author && <div className="muted">{p.author}</div>}
       <div className="st-price"><span>{gs(p.price)}</span>{p.on_offer && <s className="muted" style={{ marginLeft: 8, fontSize: 13 }}>{gs(p.list_price)}</s>}</div>
       {p.on_offer && <span className="pill ok">{p.offer_label} · −{p.saving_pct}%</span>}{p.availability === 'low' && <span className="pill warn">Quedan pocas unidades</span>}
-      {out ? <span className="pill bad">Agotado</span> : <button className="primary" onClick={() => add(p)}>Agregar</button>}
+      {out ? <span className="pill bad">Agotado</span> : <button className="primary sf-add" onClick={() => add(p)}><SfIcon n="bag" size={17} /> Agregar al carrito</button>}
     </div>
   )
 }
 
 function Home() {
-  useSeo('Librería Samantha — librería cristiana, libros y papelería', 'Un espacio de lectura y estudio inspirado en la fe cristiana. Comprá libros y papelería en línea con retiro en local o delivery.')
-  const [q, setQ] = useState('')
-  const [cat, setCat] = useState('')
+  useSeo('Librería Samantha — Biblias, devocionales y libros cristianos', 'Biblias, devocionales, libros para niños, mujeres, hombres y matrimonios. Comprá en línea con envíos a todo Paraguay.')
+  const [sp] = useSearchParams()
+  const q = sp.get('q') ?? ''
+  const cat = sp.get('cat') ?? ''
+  const onlyOffers = sp.get('oferta') === '1'
+  const filtered = !!(q || cat || onlyOffers)
   const [cats, setCats] = useState<any[]>([])
+  const [all, setAll] = useState<any[]>([])
   const [rows, setRows] = useState<any[]>([])
-  useEffect(() => { shop('/categories').then(setCats).catch(() => {}) }, [])
+  const [info, setInfo] = useState<any>(null)
+  const [more, setMore] = useState(false)
+  useEffect(() => { shop('/categories').then(setCats).catch(() => {}); shop('/info').then(setInfo).catch(() => {}); loadAll().then(setAll) }, [])
   useEffect(() => {
-    const t = setTimeout(() => shop(`/products?q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`).then(setRows).catch(() => {}), 200)
+    if (!q && !cat) { setRows(all); return }
+    const t = setTimeout(() => shop(`/products?q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`).then(setRows).catch(() => {}), 150)
     return () => clearTimeout(t)
-  }, [q, cat])
+  }, [q, cat, all])
+  useEffect(() => { if (filtered) document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, [q, cat, onlyOffers])
+  const list = onlyOffers ? all.filter((p) => p.on_offer) : rows
+  const shown = !filtered && !more ? list.slice(0, 10) : list
+  const title = onlyOffers ? 'Ofertas' : cat ? cat : q ? `Resultados para “${q}”` : 'Productos destacados'
+  const thumb = (c: string) => all.find((p) => p.category === c && p.image_url)?.image_url as string | undefined
+  const wa = info?.whatsapp?.replace(/\D/g, '')
+  const visibleCats = cats.filter((c) => c.category !== 'Servicios')
   return (
     <>
-      <section className="st-hero">
-        <div className="st-hero-copy"><span className="st-eyebrow">Tu librería cristiana en línea</span><h1>Un espacio para leer y <mark>crecer en la fe.</mark></h1><p>Libros, útiles y papelería para acompañar cada etapa de tu camino. Explorá con calma y comprá a tu manera.</p>
-          <div className="st-hero-search"><span aria-hidden="true">⌕</span><input aria-label="Buscar productos" placeholder="Buscar libros, útiles, marcas o ISBN…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="st-hero-links"><Link to="/tienda/listas">Ver listas escolares <span aria-hidden="true">↗</span></Link><Link to="/tienda/impresiones">Pedir una impresión <span aria-hidden="true">↗</span></Link></div>
+      {!filtered && <section className="sf-hero">
+        <div className="sf-wrap sf-hero-in">
+          <div className="sf-hero-copy">
+            <span className="sf-kicker">Biblias, libros y recursos para</span>
+            <h1>Crecer en tu fe cada día</h1>
+            <p>Encontrá todo lo que necesitás para tu vida espiritual y la de tu familia.</p>
+            <a href="#catalogo" className="sf-btn" onClick={(e) => { e.preventDefault(); document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' }) }}>Ver productos <SfIcon n="arrow" size={18} /></a>
+          </div>
+          <div className="sf-hero-art"><img src="/images/hero-cristiano.png" alt="Biblia abierta, libros y una cruz con ramas de olivo" /></div>
         </div>
-        <div className="st-hero-art"><img src="/images/hero-cristiano.png" alt="Biblia abierta, libros y una cruz cristiana sencilla" /></div>
-      </section>
-      <div className="st-benefits"><div><span className="st-benefit-icon">✦</span><span><b>Elegí con calma</b><small>Todo lo que buscás en un solo lugar</small></span></div><div><span className="st-benefit-icon">↗</span><span><b>Comprá en línea</b><small>Pagá y seguí tu pedido fácilmente</small></span></div><div><span className="st-benefit-icon">⌂</span><span><b>Como prefieras</b><small>Retiro en el local o delivery</small></span></div></div>
-      <section className="st-cats" aria-label="Categorías">
-        <div className="st-section-head"><div><h2>Comprá por categoría</h2></div><span>Para cada persona y cada momento</span></div>
-        <div className="st-cat-grid">
-          {cats.filter((c) => !['Servicios'].includes(c.category)).map((c) => { const a = catArt(c.category); return (
-            <button key={c.category} className={'st-cat' + (cat === c.category ? ' on' : '')} style={{ '--c1': a.c[0], '--c2': a.c[1] } as React.CSSProperties}
-              onClick={() => { setCat(c.category); setTimeout(() => document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60) }}>
-              <span className="st-cat-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={a.d} /></svg></span>
-              <b>{c.category}</b><small>{c.count} {c.count === 1 ? 'producto' : 'productos'}</small>
-            </button>) })}
+      </section>}
+
+      <section className="sf-wrap sf-circles" aria-label="Categorías">
+        <div className="sf-circle-row">
+          {visibleCats.map((c) => { const t = thumb(c.category); const a = catArt(c.category); return (
+            <Link key={c.category} to={`/tienda?cat=${encodeURIComponent(c.category)}`} className={'sf-circle' + (cat === c.category ? ' on' : '')}>
+              <span className="sf-circle-img">{t ? <img src={t.replace('s=md', 's=thumb')} alt="" loading="lazy" /> : <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={a.d} /></svg>}</span>
+              <b>{c.category}</b><small>{CAT_SUB[c.category] ?? `${c.count} productos`}</small>
+            </Link>) })}
         </div>
       </section>
-      <div id="catalogo" className="st-section-head"><div><span className="st-section-kicker">NUESTRA SELECCIÓN</span><h2>Descubrí lo que te inspira</h2></div><span>Explorá por categoría o buscá tu favorito</span></div>
-      <div className="st-chips">
-        <button className={!cat ? 'primary' : ''} onClick={() => setCat('')}>Todo</button>
-        {cats.filter((c) => !['Servicios'].includes(c.category)).map((c) => <button key={c.category} className={cat === c.category ? 'primary' : ''} onClick={() => setCat(c.category)}>{c.category}</button>)}
-      </div>
-      <div className="st-grid">{rows.map((p) => <ProductCard key={p.id} p={p} />)}</div>
-      {!rows.length && <p className="muted">No encontramos productos con ese criterio.</p>}
-      {!q && !cat && <section className="st-faith-banner"><img src="/images/lectura-cristiana.png" alt="Biblia abierta y cuaderno en un espacio de lectura" loading="lazy" /><div><span className="st-section-kicker">LECTURA Y FE</span><h2>Un momento para leer y reflexionar.</h2><p>Inspiración para seguir aprendiendo cada día.</p></div></section>}
+
+      <section className="sf-wrap sf-products" id="catalogo">
+        <div className="sf-sec-head"><h2>{title}</h2>{(filtered || list.length > 10) && (filtered ? <Link to="/tienda" className="sf-link">Ver todo el catálogo ›</Link> : <button className="sf-link" onClick={() => setMore(!more)}>{more ? 'Ver menos' : 'Ver todos'} ›</button>)}</div>
+        <div className="st-grid sf-grid">{shown.map((p) => <ProductCard key={p.id} p={p} />)}</div>
+        {!shown.length && <p className="muted sf-empty">No encontramos productos con ese criterio. Probá con otra palabra o elegí una categoría.</p>}
+      </section>
+
+      {!filtered && <section className="sf-wrap sf-banners">
+        <div className="sf-banner sf-banner-photo"><div><h3>Todo lo puedo en Cristo que me fortalece</h3><span>Filipenses 4:13</span></div></div>
+        <div className="sf-banner sf-banner-green"><div><h3>Devocionales para cada etapa de tu vida</h3><Link to="/tienda?cat=Devocionales" className="sf-btn sf-btn-forest">Ver colección</Link></div><img src="/images/hero-cristiano.png" alt="" loading="lazy" /></div>
+      </section>}
+
+      {!filtered && <section className="sf-wrap sf-benefits">
+        <div><SfIcon n="truck" size={38} /><span><b>Envíos a todo Paraguay</b><small>Rápidos y seguros</small></span></div>
+        <div><SfIcon n="card" size={38} /><span><b>Varios medios de pago</b><small>Tarjeta, transferencia y más</small></span></div>
+        <div><SfIcon n="shield" size={38} /><span><b>Compra segura</b><small>Tus datos protegidos</small></span></div>
+        <div><SfIcon n="headset" size={38} /><span><b>Atención personalizada</b><small>Estamos para ayudarte</small></span></div>
+      </section>}
+
+      {wa && <section className="sf-band"><div className="sf-wrap sf-band-in">
+        <div><h3>¿Buscás algo en particular?</h3><p>Escribinos por WhatsApp y te ayudamos a elegir: Biblias, devocionales, regalos y más.</p></div>
+        <a className="sf-btn" href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`} target="_blank" rel="noreferrer"><SfIcon n="chat" size={18} /> Escribir por WhatsApp</a>
+      </div></section>}
     </>
   )
 }
-
 function ProductPage() {
   const { id } = useParams()
   const { add } = useCart()

@@ -7,7 +7,7 @@ import { createPool, migrate } from './client.js'
 const db = createPool(process.env.DATABASE_URL!)
 await migrate(db)
 
-const PALETTES: [string, string][] = [['#1f2a7a', '#3f48cf'], ['#14507a', '#2a86c4'], ['#0f5c5c', '#1f9a94'], ['#3a2a86', '#6a48c8'], ['#26325f', '#4a5a96'], ['#1a5a44', '#2a9a70'], ['#3a3f55', '#5f6a88'], ['#4a3a86', '#7a64c4']]
+const PALETTES: [string, string][] = [['#5a1a26', '#8a2f40'], ['#1f4a35', '#2f6b4d'], ['#1f2d5a', '#34508f'], ['#4e3320', '#7d5233'], ['#43285a', '#6d4380'], ['#1d5a5e', '#2f8387'], ['#34383f', '#5b6270'], ['#7a5a1a', '#a97a1f']]
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const wrap = (text: string, max: number) => {
   const out: string[] = []; let line = ''
@@ -19,7 +19,7 @@ function bookSvg(title: string, author: string | null, i: number) {
   const [a, b] = PALETTES[i % PALETTES.length]
   const lines = wrap(title, 14)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef2ff"/><stop offset="1" stop-color="#dbe4ff"/></linearGradient>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbf6ea"/><stop offset="1" stop-color="#efe3c8"/></linearGradient>
   <linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>
   <filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="14" dy="22" stdDeviation="18" flood-color="#0f172a" flood-opacity=".35"/></filter></defs>
   <rect width="800" height="800" fill="url(#bg)"/>

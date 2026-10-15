@@ -107,63 +107,10 @@ th { background: var(--surface-2); }
 .login .card { background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(18px); border: 1px solid rgb(255 255 255 / 50%); box-shadow: 0 40px 90px -28px rgb(6 8 50 / 75%); border-radius: 26px; }
 .login-back { color: var(--brand-text); }
 
-/* ---- Tienda */
-.st-announcement { background: linear-gradient(90deg, var(--sidebar), color-mix(in srgb, var(--brand) 55%, var(--sidebar))); }
-.st-head { background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); }
-.st-logo { gap: 11px; }
-.st-logo .logo-mark { border-radius: 28%; box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--brand) 70%, transparent); }
-.st-logo span strong { letter-spacing: -.035em; }
-.st-cart { background: var(--grad-brand); box-shadow: var(--glow); }
-.st-cart:hover { background: var(--grad-brand); filter: brightness(1.08); }
-.st-hero { position: relative; isolation: isolate; background: var(--dawn-night); box-shadow: 0 30px 64px -28px color-mix(in srgb, var(--brand) 65%, transparent); }
-.st-hero::before { content: ''; position: absolute; z-index: -1; right: -60px; bottom: -240px; width: 680px; height: 680px; border-radius: 50%; background: radial-gradient(circle, rgb(255 214 140 / 46%), rgb(255 214 140 / 10%) 46%, transparent 68%); animation: sunrise 1.8s cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes sunrise { from { transform: translateY(180px) scale(.8); opacity: 0; } }
-.st-hero-art { position: relative; z-index: 1; }
-.st-hero mark { color: #f6d58d; background: none; }
-.st-eyebrow { text-transform: none; letter-spacing: .01em; font-size: 12.5px; background: rgb(255 255 255 / 12%); border-color: rgb(255 255 255 / 22%); backdrop-filter: blur(8px); }
-.st-hero-search { box-shadow: 0 18px 36px -14px rgb(6 8 50 / 45%); }
-.st-benefit-icon { background: var(--brand-soft); color: var(--brand-text); box-shadow: none; }
-.st-chips button { background: var(--surface); }
-.st-chips button.primary { background: var(--grad-brand); border-color: transparent; box-shadow: var(--glow); }
-.st-card { border-radius: 20px; border-color: var(--border); display: flex; flex-direction: column; }
-.st-card .st-price { margin-top: auto; }
-.st-card:hover { border-color: color-mix(in srgb, var(--brand) 28%, var(--border)); box-shadow: 0 26px 44px -24px color-mix(in srgb, var(--brand) 42%, transparent); }
-.st-img { background: radial-gradient(circle at 78% 22%, color-mix(in srgb, var(--amber) 22%, var(--surface-2)), transparent 42%), linear-gradient(145deg, color-mix(in srgb, var(--brand) 10%, var(--surface)), color-mix(in srgb, var(--brand) 4%, var(--surface))); }
-.st-category { color: var(--brand-text); }
-.st-faith-banner::after { background: linear-gradient(90deg, var(--sidebar) 0%, color-mix(in srgb, var(--sidebar) 92%, transparent) 30%, color-mix(in srgb, var(--brand) 50%, transparent) 62%, transparent); }
-.st-foot { background: radial-gradient(520px 320px at 0% 110%, var(--side-glow-2), transparent 70%), radial-gradient(420px 280px at 100% -10%, var(--side-glow-1), transparent 70%), linear-gradient(160deg, var(--sidebar), color-mix(in srgb, var(--sidebar) 78%, var(--brand))); }
-.st-foot-mark { border-radius: 28%; flex: none; }
-.st-chat-fab { background: var(--grad-brand); color: #fff; box-shadow: var(--glow); }
-.st-chat-head { background: var(--dawn); color: #fff; }
-.st-bottom { background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(16px); }
-.cart-count { background: var(--grad-brand); }
-.st-card .st-fav { width: 38px; height: 38px; min-height: 38px; margin: 0; right: 16px; top: 16px; display: grid; place-items: center; background: rgb(255 255 255 / 82%); backdrop-filter: blur(10px); color: var(--brand); box-shadow: 0 8px 18px -8px rgb(20 24 90 / 40%); }
-.st-card .st-fav:hover { background: #fff; transform: scale(1.06); }
-
-/* ---- Comprá por categoría: tarjetas limpias, solo el ícono lleva color */
-.st-cats .st-section-head { margin-bottom: 14px; }
-.st-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; }
-.st-cat { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 2px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 18px; text-align: left; color: var(--text); background: var(--surface); box-shadow: var(--shadow); transition: transform .2s, border-color .2s, box-shadow .2s; }
-.st-cat:hover { background: var(--surface); transform: translateY(-2px); border-color: color-mix(in srgb, var(--c1) 45%, var(--border)); box-shadow: 0 20px 34px -22px var(--c1); }
-.st-cat.on { border-color: var(--c1); background: color-mix(in srgb, var(--c1) 7%, var(--surface)); box-shadow: 0 0 0 1px var(--c1); }
-.st-cat-ico { grid-row: span 2; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: #fff; background: linear-gradient(140deg, var(--c1), var(--c2)); box-shadow: 0 10px 18px -10px var(--c1); }
-.st-cat b { font-family: var(--font-display); font-size: 16px; letter-spacing: -.02em; line-height: 1.15; align-self: end; }
-.st-cat small { font-size: 12px; color: var(--muted); align-self: start; }
-
 /* ---- Teléfono */
 @media (max-width: 719px) {
   .kpi { min-height: 0; padding: 16px 14px 14px 16px; }
-  .st-hero::before { width: 460px; height: 460px; right: -140px; bottom: -190px; }
   .login .card { border-radius: 24px; }
-  .st-cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .st-cat { grid-template-columns: 1fr; gap: 8px; padding: 13px; }
-  .st-cat-ico { grid-row: auto; width: 40px; height: 40px; border-radius: 12px; }
-  .st-cat b, .st-cat small { align-self: auto; }
-  .st-bottom { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding-inline: 8px; }
-  .st-bottom a, .st-bottom-cart { display: grid; place-items: center; min-height: 48px; padding: 6px 2px; border-radius: 12px; font: 650 12px/1.2 var(--font-body); color: var(--muted); text-decoration: none; text-align: center; }
-  .st-bottom a.active { background: var(--brand-soft); color: var(--brand-text); }
-  .st-bottom-cart { cursor: pointer; }
-  .st-bottom-cart b { margin: 2px 0 0; background: var(--grad-brand); color: #fff; border-radius: 99px; padding: 0 7px; font-size: 11px; }
 }
 
 /* ---- Estilos de color: cada uno define el color principal y el tono del menú lateral */

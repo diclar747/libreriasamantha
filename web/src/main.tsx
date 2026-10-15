@@ -36,6 +36,7 @@ import './modern.css'
 import './ui.css'
 import './app.css'
 import './aurora.css'
+import './storefront.css'
 
 type Item = [path: string, label: string, icon: IconName]
 const NAV: { group: string; items: Item[] }[] = [
