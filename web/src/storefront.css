@@ -226,3 +226,11 @@
 @media (max-width: 719px) { .pwa-banner { left: 12px; right: 12px; width: auto; bottom: calc(80px + env(safe-area-inset-bottom)); } .pwa-banner-text b { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .pwa-banner, .pwa-toast { animation: none; } }
 @media (display-mode: standalone) { .sf-util { padding-top: calc(9px + env(safe-area-inset-top)); } }
+
+/* Barra inferior de la tienda en teléfono: 5 accesos en una sola fila */
+@media (max-width: 719px) {
+  .st-bottom { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding-inline: 8px; }
+  .st-bottom a, .st-bottom-cart { display: grid; place-items: center; min-height: 48px; padding: 6px 2px; border-radius: 12px; border: 0; box-shadow: none; background: none; font: 650 12px/1.2 var(--font-body); color: var(--muted); text-decoration: none; text-align: center; }
+  .st-bottom-cart { cursor: pointer; }
+  .st-bottom-cart b { margin: 2px 0 0; padding: 0 7px; border-radius: 99px; color: #fff; font-size: 11px; }
+}

@@ -132,7 +132,7 @@ function Shell() {
   const [profile, setProfile] = useState<any>(null)
   useResponsiveTables()
   useEffect(() => { setSheet(false); window.scrollTo(0, 0) }, [pathname])
-  useEffect(() => { document.title = user ? 'Gestión — Librería Samantha' : 'Ingresar — Librería Samantha' }, [user])
+  useEffect(() => { document.title = user ? 'Gestión — Samantha' : 'Ingresar — Samantha' }, [user])
   useEffect(() => {
     if (!user) return
     const load = () => api('/me/profile').then(setProfile).catch(() => {})

@@ -1,6 +1,6 @@
 // Service worker de Samantha: la app abre sin conexión, las fotos y el catálogo se guardan para verlos de nuevo
 // y las actualizaciones se avisan al usuario. Nunca guarda datos de la administración (todo /api/ autenticado).
-const VERSION = 'samantha-v3'
+const VERSION = 'samantha-v4'
 const SHELL = `shell-${VERSION}`, ASSETS = `assets-${VERSION}`, IMAGES = `img-${VERSION}`, API = `api-${VERSION}`
 const CURRENT = [SHELL, ASSETS, IMAGES, API]
 const PRECACHE = ['/', '/tienda', '/offline.html', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/brand/samantha-lockup.png', '/brand/samantha-wordmark.png', '/manifest-store.webmanifest', '/manifest-admin.webmanifest']
@@ -41,6 +41,7 @@ const navigate = async (e) => {
     if (res.ok) c.put(key, res.clone())
     return res
   } catch {
+    if (new URL(e.request.url).pathname === '/offline.html') return (await c.match('/offline.html')) || Response.error()
     return (await c.match(key)) || (await c.match('/')) || (await c.match('/offline.html')) || Response.error()
   }
 }
