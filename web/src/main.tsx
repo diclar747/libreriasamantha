@@ -7,6 +7,7 @@ import './responsive.css'
 import { AppProvider, canSee, useApp } from './api'
 import { Icon, type IconName } from './components/Icons'
 import { Avatar, Bell, UserMenu } from './components/Topbar'
+import { LogoMark } from './components/Logo'
 import ThemePicker from './components/ThemePicker'
 import { api } from './api'
 import Profile from './pages/Profile'
@@ -34,6 +35,7 @@ import Store, { PayPage } from './store/Store'
 import './modern.css'
 import './ui.css'
 import './app.css'
+import './aurora.css'
 
 type Item = [path: string, label: string, icon: IconName]
 const NAV: { group: string; items: Item[] }[] = [
@@ -61,7 +63,7 @@ function Login() {
   return (
     <div className="login">
       <form className="card" onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { await login(u, p) } catch (er: any) { toast(er.message, true) } finally { setBusy(false) } }}>
-        <div className="logo" style={{ padding: 0 }}><i>S</i> Librería Samantha</div>
+        <div className="logo logo-login"><LogoMark size={56} /><span><small>Librería</small>Samantha</span></div>
         <p className="muted" style={{ margin: 0 }}>Acceso para usuarios del sistema y administradores.</p>
         <label>Usuario<input value={u} onChange={(e) => setU(e.target.value)} autoFocus autoCapitalize="none" autoComplete="username" /></label>
         <label>Contraseña<input type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" /></label>
@@ -147,7 +149,7 @@ function Shell() {
   return (
     <div className={'shell' + (collapsed ? ' collapsed' : '')}>
       <nav className="side" aria-label="Principal">
-        <div className="logo"><i>S</i><span>Samantha</span><button className="nav-toggle" onClick={toggleNav} aria-label={collapsed ? 'Expandir el menú' : 'Minimizar el menú'} title={collapsed ? 'Expandir menú' : 'Minimizar menú'}>{collapsed ? '»' : '«'}</button></div>
+        <div className="logo"><LogoMark size={42} /><span><small>Librería</small>Samantha</span><button className="nav-toggle" onClick={toggleNav} aria-label={collapsed ? 'Expandir el menú' : 'Minimizar el menú'} title={collapsed ? 'Expandir menú' : 'Minimizar menú'}>{collapsed ? '»' : '«'}</button></div>
         {groups.map((g) => (
           <div key={g.group || 'top'}>
             {g.group && <div className="group">{g.group}</div>}
@@ -162,7 +164,7 @@ function Shell() {
       </nav>
 
       <header className="topbar">
-        <div className="logo" style={{ padding: 0 }}><i>S</i></div>
+        <div className="logo" style={{ padding: 0 }}><LogoMark size={34} /></div>
         <h1>{current?.[1] ?? 'Samantha'}</h1>
         <ThemePicker />
         {install.canInstall && <button className="icon-btn" onClick={install.prompt} aria-label="Instalar app"><Icon name="download" /></button>}

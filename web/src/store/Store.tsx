@@ -1,3 +1,4 @@
+import { LogoMark } from '../components/Logo'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { gs, useApp } from '../api'
@@ -94,7 +95,7 @@ function Layout({ children }: { children: ReactNode }) {
     <div className="st">
       <div className="st-announcement"><span>Lecturas que inspiran fe ✦</span><span>Comprá en línea · Retirá en el local o recibí tu pedido</span></div>
       <header className="st-head">
-        <Link to="/tienda" className="st-logo"><i>S</i><span><b>Librería</b><strong>Samantha</strong></span></Link>
+        <Link to="/tienda" className="st-logo"><LogoMark size={46} /><span><b>Librería</b><strong>Samantha</strong></span></Link>
         <nav>
           <NavLink to="/tienda" end>Explorar</NavLink>
           <Link to="/tienda/listas">Listas escolares</Link>
@@ -112,7 +113,7 @@ function Layout({ children }: { children: ReactNode }) {
         <button className="st-bottom-cart" onClick={() => setOpen(true)}>Carrito{count > 0 && <b>{count}</b>}</button>
       </nav>
       <footer className="st-foot">
-        <div className="st-foot-brand"><span className="st-foot-logo">S</span><div><b>{info?.name ?? 'Librería Samantha'}</b><p>Lecturas para acompañar tu camino de fe.</p></div></div>
+        <div className="st-foot-brand"><LogoMark size={48} className="st-foot-mark" /><div><b>{info?.name ?? 'Librería Samantha'}</b><p>Lecturas para acompañar tu camino de fe.</p></div></div>
         <div><b>Tu compra</b><Link to="/tienda">Explorar productos</Link><Link to="/tienda/pedido">Seguir mi pedido</Link><Link to="/tienda/listas">Listas escolares</Link>{profile ? <Link to="/tienda/cuenta">Mi cuenta</Link> : <Link to="/tienda/registro">Crear mi cuenta</Link>}<Link to="/admin">Acceso del personal</Link></div>
         <div><b>Estamos cerca</b><span>{info?.address}</span><span>{info?.hours}</span>{wa && <a href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`}>Escribinos por WhatsApp</a>}</div>
       </footer>
