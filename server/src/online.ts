@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requirePerm } from './auth.js'
-import { quoteCity, baseFee } from './delivery.js'
+import { deliveryConfig, promoActive, quoteCity } from './delivery.js'
 import { HttpError, withTx, type Db } from './db/client.js'
 import { notify } from './notifications.js'
 import { logOrder, notifyCustomer } from './orderflow.js'
@@ -13,21 +13,30 @@ const publicAccount = 'id, name, bank_name, account_number, holder, holder_docum
 
 // ---------------------------------------------------------------- Público: ciudades, tarifas, medios de pago y comprobantes
 export function onlineShopRoutes(app: FastifyInstance, db: Db) {
+  // Ciudades con delivery: TODAS las del catálogo (con la tarifa general) salvo las que el local desactivó.
   app.get('/cities', async (req) => {
     const { q, department } = req.query as Record<string, string | undefined>
-    const base = await baseFee(db)
+    const cfg = await deliveryConfig(db)
+    if (!cfg.enabled) return []
     const { rows } = await db.query(
-      `SELECT c.id, c.name, c.department, COALESCE(r.covered, false) AS covered, COALESCE(r.price, $3::bigint) AS fee, r.eta
+      `SELECT c.id, c.name, c.department, COALESCE(r.price, $3::bigint) AS fee, COALESCE(r.eta, $4::text) AS eta, COALESCE(r.free_mode, 'global') AS free_mode
        FROM geo_cities c LEFT JOIN delivery_rates r ON r.city_id = c.id
-       WHERE c.active AND ($1::text IS NULL OR c.name ILIKE $1) AND ($2::text IS NULL OR c.department = $2) ORDER BY c.department = 'Capital' DESC, COALESCE(r.covered, false) DESC, c.name LIMIT 400`,
-      [q ? `%${q}%` : null, department ?? null, base])
-    return rows
+       WHERE c.active AND COALESCE(r.covered, true) AND ($1::text IS NULL OR c.name ILIKE $1) AND ($2::text IS NULL OR c.department = $2)
+       ORDER BY c.department = 'Capital' DESC, c.department, c.name LIMIT 400`,
+      [q ? `%${q}%` : null, department ?? null, cfg.baseFee, cfg.defaultEta])
+    return rows.map((r) => ({ id: r.id, name: r.name, department: r.department, covered: true, fee: Number(r.fee), eta: r.eta, freeMode: r.free_mode }))
   })
+  app.get('/delivery/info', async () => {
+    const c = await deliveryConfig(db)
+    return { enabled: c.enabled, baseFee: c.baseFee, freeFrom: promoActive(c) ? c.freeFrom : null, promoEnd: promoActive(c) ? c.promoEnd : null, defaultEta: c.defaultEta }
+  })
+  // Cotización para el checkout: el cliente solo pide el costo; el importe real lo vuelve a calcular el servidor al crear el pedido.
   app.get('/delivery/quote', async (req) => {
-    const { cityId, zone } = req.query as Record<string, string | undefined>
+    const { cityId, zone, subtotal } = req.query as Record<string, string | undefined>
     if (!cityId) throw new HttpError(400, 'Falta la ciudad')
-    const c = await quoteCity(db, Number(cityId), zone)
-    return { cityId: c.cityId, city: c.city, department: c.department, covered: c.covered, fee: c.covered ? c.fee : null, eta: c.eta, notes: c.notes, specialZones: c.specialZones }
+    const sub = subtotal !== undefined && subtotal !== '' && Number.isFinite(Number(subtotal)) ? Math.max(0, Math.round(Number(subtotal))) : undefined
+    const c = await quoteCity(db, Number(cityId), zone, sub)
+    return { cityId: c.cityId, city: c.city, department: c.department, covered: c.covered, fee: c.covered ? c.fee : null, baseFee: c.covered ? c.baseFee : null, free: c.freeReason !== null, freeReason: c.freeReason, freeFrom: c.freeFrom, missingForFree: c.missingForFree, eta: c.eta, notes: c.notes, specialZones: c.specialZones }
   })
   app.get('/payment-options', async () => {
     const { rows } = await db.query(`SELECT ${publicAccount} FROM money_accounts WHERE kind = 'bank' AND active AND online_enabled ORDER BY id`)
@@ -74,56 +83,6 @@ export function onlineShopRoutes(app: FastifyInstance, db: Db) {
 
 // ---------------------------------------------------------------- Administración: tarifas por ciudad, comprobantes y panel de pedidos
 export function onlineAdminRoutes(app: FastifyInstance, db: Db) {
-  app.get('/delivery/cities', async (req) => {
-    requirePerm(req, 'orders.manage')
-    const q = req.query as Record<string, string | undefined>
-    const base = await baseFee(db)
-    const w: string[] = []
-    const params: unknown[] = []
-    if (q.q) { params.push(`%${q.q}%`); w.push(`c.name ILIKE $${params.length}`) }
-    if (q.department) { params.push(q.department); w.push(`c.department = $${params.length}`) }
-    if (q.covered === '1') w.push('COALESCE(r.covered, false)'); else if (q.covered === '0') w.push('NOT COALESCE(r.covered, false)')
-    const { rows } = await db.query(
-      `SELECT c.id, c.name, c.department, c.active, COALESCE(r.covered, false) AS covered, r.price, COALESCE(r.price, ${base}::bigint) AS fee, r.eta, r.notes, COALESCE(r.special_zones, '[]'::jsonb) AS special_zones, r.updated_at
-       FROM geo_cities c LEFT JOIN delivery_rates r ON r.city_id = c.id ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY c.department = 'Capital' DESC, c.department, c.name`, params)
-    const { rows: deps } = await db.query('SELECT DISTINCT department FROM geo_cities ORDER BY 1')
-    return { baseFee: base, departments: deps.map((d) => d.department), cities: rows }
-  })
-  const rateBody = z.object({
-    covered: z.boolean().optional(), price: z.number().int().min(0).nullish(), eta: z.string().max(80).nullish(), notes: z.string().max(300).nullish(), active: z.boolean().optional(),
-    specialZones: z.array(z.object({ name: z.string().min(2).max(80), fee: z.number().int().min(0) })).max(30).optional(),
-  })
-  const saveRate = async (id: number, b: z.infer<typeof rateBody>, userId: number) => {
-    if (b.active !== undefined) await db.query('UPDATE geo_cities SET active = $2 WHERE id = $1', [id, b.active])
-    const { rows } = await db.query('SELECT 1 FROM geo_cities WHERE id = $1', [id])
-    if (!rows[0]) throw new HttpError(404, 'Ciudad no encontrada')
-    await db.query(
-      `INSERT INTO delivery_rates (city_id, covered, price, eta, notes, special_zones, updated_by) VALUES ($1, COALESCE($2, false), $3, $4, $5, COALESCE($6::jsonb, '[]'), $7)
-       ON CONFLICT (city_id) DO UPDATE SET covered = COALESCE($2, delivery_rates.covered), price = CASE WHEN $8 THEN $3 ELSE delivery_rates.price END, eta = CASE WHEN $9 THEN $4 ELSE delivery_rates.eta END,
-         notes = CASE WHEN $10 THEN $5 ELSE delivery_rates.notes END, special_zones = COALESCE($6::jsonb, delivery_rates.special_zones), updated_by = $7, updated_at = now()`,
-      [id, b.covered ?? null, b.price ?? null, b.eta ?? null, b.notes ?? null, b.specialZones ? JSON.stringify(b.specialZones) : null, userId, b.price !== undefined, b.eta !== undefined, b.notes !== undefined])
-  }
-  app.put('/delivery/cities/:id', async (req) => {
-    requirePerm(req, 'settings.write')
-    await saveRate(Number((req.params as any).id), rateBody.parse(req.body), req.user!.id)
-    return { ok: true }
-  })
-  app.post('/delivery/cities/bulk', async (req) => {
-    requirePerm(req, 'settings.write')
-    const b = z.object({ ids: z.array(z.number().int()).min(1).max(500) }).and(rateBody).parse(req.body)
-    for (const id of b.ids) await saveRate(id, b, req.user!.id)
-    return { updated: b.ids.length }
-  })
-  app.post('/delivery/cities', async (req, reply) => {
-    requirePerm(req, 'settings.write')
-    const b = z.object({ department: z.string().min(2).max(60), name: z.string().min(2).max(80) }).and(rateBody).parse(req.body)
-    try {
-      const { rows } = await db.query('INSERT INTO geo_cities (department, name) VALUES ($1,$2) RETURNING id', [b.department, b.name])
-      await saveRate(rows[0].id, b, req.user!.id)
-      return reply.code(201).send({ id: rows[0].id })
-    } catch (e: any) { if (e.code === '23505') throw new HttpError(409, 'Esa ciudad ya existe'); throw e }
-  })
-
   // ---- Revisión de comprobantes de transferencia
   app.get('/payment-proofs', async (req) => {
     requirePerm(req, 'orders.manage')

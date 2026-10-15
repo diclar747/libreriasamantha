@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { seedGeo } from './geo.js'
+import { syncGeo } from './geo.js'
 
 // BIGINT (int8) llega como string por defecto; los importes en guaraníes caben en number.
 pg.types.setTypeParser(20, (v) => Number(v))
@@ -16,10 +16,10 @@ export function createPool(url: string): Db {
 }
 
 export async function migrate(db: Db) {
-  for (const file of ['schema.sql', 'schema2.sql', 'schema4.sql', 'chart.sql', 'chart2.sql', 'schema5.sql', 'chart3.sql', 'schema6.sql', 'schema7.sql']) {
+  for (const file of ['schema.sql', 'schema2.sql', 'schema4.sql', 'chart.sql', 'chart2.sql', 'schema5.sql', 'chart3.sql', 'schema6.sql', 'schema7.sql', 'schema8.sql']) {
     await db.query(readFileSync(fileURLToPath(new URL('./' + file, import.meta.url)), 'utf8'))
   }
-  await seedGeo(db)
+  await syncGeo(db)
 }
 
 export async function withTx<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {

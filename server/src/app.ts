@@ -24,6 +24,7 @@ import { cashRoutes } from './routes/cash.js'
 import { reportRoutes } from './reports/routes.js'
 import { PUBLIC_URL } from './payments.js'
 import { onlineAdminRoutes, onlineShopRoutes } from './online.js'
+import { deliveryAdminRoutes } from './routes/delivery.js'
 import { scanPublicRoutes, scanRoutes } from './scanning.js'
 import { orderAdminRoutes2, orderRefundRoutes } from './orderadmin.js'
 import { portalAdminRoutes, portalRoutes } from './portal.js'
@@ -91,6 +92,7 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
       serviceRoutes(priv, db)
       orderAdminRoutes(priv, db)
       onlineAdminRoutes(priv, db)
+      deliveryAdminRoutes(priv, db)
       orderAdminRoutes2(priv, db)
       orderRefundRoutes(priv, db)
       portalAdminRoutes(priv, db)

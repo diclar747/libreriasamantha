@@ -36,11 +36,15 @@ export async function createOrder(db: Db, rawInput: z.input<typeof orderInput>, 
   if (input.paymentMethod === 'cod' && !shop.codEnabled) throw new HttpError(400, 'El pago contra entrega no está habilitado')
   if (input.paymentMethod === 'cod' && input.delivery.method !== 'delivery') throw new HttpError(400, 'El pago contra entrega es solo para delivery')
   // Un reintento (doble clic, reenvío) devuelve el mismo pedido en vez de crear otro.
-  if (opts.accountId && input.idempotencyKey) {
-    const { rows } = await db.query('SELECT * FROM orders WHERE account_id = $1 AND idempotency_key = $2', [opts.accountId, input.idempotencyKey])
-    if (rows[0]) return { order: rows[0], payment: input.paymentMethod === 'bancard' && rows[0].payment_status === 'pending' ? await startPayment(db, rows[0].id) : null, duplicate: true }
+  const existing = async () => {
+    if (!input.idempotencyKey) return null
+    const { rows } = await db.query('SELECT * FROM orders WHERE idempotency_key = $1 AND account_id IS NOT DISTINCT FROM $2', [input.idempotencyKey, opts.accountId ?? null])
+    return rows[0] ? { order: rows[0], payment: input.paymentMethod === 'bancard' && rows[0].payment_status === 'pending' ? await startPayment(db, rows[0].id) : null, duplicate: true as const } : null
   }
-  const created = await withTx(db, async (tx) => {
+  const dup = await existing()
+  if (dup) return dup
+  let created: any
+  try { created = await withTx(db, async (tx) => {
     let fee = 0
     let deliveryCost = 0
     let city: Awaited<ReturnType<typeof quoteCity>> | null = null
@@ -48,7 +52,7 @@ export async function createOrder(db: Db, rawInput: z.input<typeof orderInput>, 
       if (!input.delivery.address?.trim()) throw new HttpError(400, 'El delivery requiere la dirección de entrega')
       if (input.delivery.cityId) {
         city = await quoteCity(tx, input.delivery.cityId, input.delivery.zone)
-        if (!city.covered) throw new HttpError(409, `Todavía no hacemos entregas en ${city.city}. Podés retirar en el local.`)
+        if (!city.covered) throw new HttpError(409, `Por ahora no hacemos entregas en ${city.city}. Podés elegir otra ciudad o retirar en el local.`)
         fee = city.fee
       } else if (input.delivery.zoneId) {
         const { rows } = await tx.query('SELECT fee, cost FROM delivery_zones WHERE id = $1 AND active', [input.delivery.zoneId])
@@ -77,6 +81,8 @@ export async function createOrder(db: Db, rawInput: z.input<typeof orderInput>, 
       couponCode = c.code
       await tx.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1', [c.id])
     }
+    // El costo de entrega lo fija el servidor con la tarifa vigente y el importe real de la compra (no el navegador).
+    if (city && input.delivery.cityId) { city = await quoteCity(tx, input.delivery.cityId, input.delivery.zone, subtotal - discount); fee = city.fee }
     for (const p of prods) await tx.query('UPDATE products SET reserved = reserved + $2 WHERE id = $1', [p.id, merged.get(p.id)])
 
     const { rows: seq } = await tx.query(`SELECT nextval('order_number_seq') AS n`)
@@ -90,20 +96,24 @@ export async function createOrder(db: Db, rawInput: z.input<typeof orderInput>, 
         input.delivery.method, input.delivery.address ?? null, input.delivery.zoneId ?? null, fee, subtotal, subtotal - discount + fee, input.paymentMethod !== 'bancard' ? Number(shop.transferReserveHours ?? 24) * 60 : shop.reserveMinutes ?? 30, token, discount, couponCode, deliveryCost])
     await tx.query(
       `UPDATE orders SET city_id = $2, city_name = $3, department = $4, address_reference = $5, tariff_source = $6, payment_method = $7, billing_name = $8, billing_ruc = $9,
-         account_id = $10, customer_id = $11, recipient_name = $12, recipient_phone = $13, neighborhood = $14, idempotency_key = $15 WHERE id = $1`,
+         account_id = $10, customer_id = $11, recipient_name = $12, recipient_phone = $13, neighborhood = $14, idempotency_key = $15, delivery_base_fee = $16, delivery_free_reason = $17 WHERE id = $1`,
       [rows[0].id, city?.cityId ?? null, city?.city ?? null, city?.department ?? null, input.delivery.reference ?? null, city ? city.source : input.delivery.zoneId ? 'zone' : null, input.paymentMethod, input.billing?.name ?? null, input.billing?.ruc ?? null,
         opts.accountId ?? null, opts.accountId ? (await tx.query('SELECT customer_id FROM customer_accounts WHERE id = $1', [opts.accountId])).rows[0]?.customer_id ?? null : null,
-        input.recipient?.name ?? null, input.recipient?.phone ?? null, input.delivery.neighborhood ?? null, opts.accountId ? input.idempotencyKey ?? null : null])
+        input.recipient?.name ?? null, input.recipient?.phone ?? null, input.delivery.neighborhood ?? null, input.idempotencyKey ?? null, input.delivery.method === 'delivery' ? (city ? city.baseFee : fee) : null, city?.freeReason ?? null])
     await logOrder(tx, rows[0].id, { kind: 'order', to: 'pending', title: 'Pedido recibido', note: input.paymentMethod === 'transfer' ? 'Pago por transferencia: esperando el comprobante' : input.paymentMethod === 'cod' ? 'Pago contra entrega: pendiente de revisión' : undefined, accountId: opts.accountId })
     for (const p of prods) {
       await tx.query('INSERT INTO order_items (order_id, product_id, name, qty, unit_price) VALUES ($1,$2,$3,$4,$5)', [rows[0].id, p.id, p.name, merged.get(p.id), effectivePrice(p, 'online').price])
     }
     return (await tx.query('SELECT * FROM orders WHERE id = $1', [rows[0].id])).rows[0]
-  })
+  }) } catch (e: any) {
+    // Dos envíos simultáneos con la misma clave: gana uno y el otro recibe ese mismo pedido (nunca se crea uno doble).
+    if (e?.code === '23505' && String(e?.constraint ?? '').includes('orders_idem')) { const d = await existing(); if (d) return d }
+    throw e
+  }
   const payment = input.paymentMethod === 'bancard' ? await startPayment(db, created.id) : null
   await withTx(db, (tx) => notifyCustomer(tx, created, { type: 'order_received', title: 'Recibimos tu pedido', body: 'Está pendiente de revisión.', dedupeKey: `recv:${created.id}` })).catch(() => {})
   await notify(db, { type: 'order_new', title: `Pedido nuevo ${created.number}`, body: `${created.customer_name} · Gs. ${Number(created.total).toLocaleString('es-PY')} · esperando el pago`, link: '/orders', dedupeKey: `order-new:${created.id}` }).catch(() => {})
-  return { order: created, payment }
+  return { order: created, payment, duplicate: false as const }
 }
 
 // Valida un cupón contra el subtotal y calcula el descuento.

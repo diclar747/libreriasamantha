@@ -8,12 +8,12 @@ export type Role = (typeof ROLES)[number]
 export const PERMISSIONS: Record<Role, string[]> = {
   owner: ['*'],
   admin: ['*'],
-  cashier: ['workorders.write', 'orders.manage', 'pos.sell', 'cash.manage', 'cash.withdraw', 'attachments.write', 'customers.read', 'customers.write', 'customers.collect', 'products.read', 'discount.limited'],
+  cashier: ['delivery.view', 'workorders.write', 'orders.manage', 'pos.sell', 'cash.manage', 'cash.withdraw', 'attachments.write', 'customers.read', 'customers.write', 'customers.collect', 'products.read', 'discount.limited'],
   seller: ['workorders.write', 'pos.sell', 'customers.read', 'products.read', 'discount.limited'],
   buyer: ['attachments.write', 'products.read', 'costs.view', 'purchases.write', 'purchases.view', 'suppliers.write', 'stock.read'],
-  warehouse: ['orders.manage', 'products.read', 'stock.read', 'stock.adjust', 'purchases.receive', 'purchases.view'],
+  warehouse: ['delivery.view', 'orders.manage', 'products.read', 'stock.read', 'stock.adjust', 'purchases.receive', 'purchases.view'],
   accountant: ['expenses.write', 'purchases.view', 'purchases.invoice', 'suppliers.pay', 'reports.export', 'payments.settle', 'attachments.write', 'accounting.view', 'accounting.write', 'invoices.view', 'products.read', 'costs.view', 'reports.view', 'customers.read', 'stock.read'],
-  support: ['orders.manage', 'workorders.write', 'products.read', 'customers.read', 'stock.read'],
+  support: ['delivery.view', 'orders.manage', 'workorders.write', 'products.read', 'customers.read', 'stock.read'],
 }
 
 export function can(role: string, perm: string) {

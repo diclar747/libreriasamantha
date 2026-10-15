@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { requirePerm } from './auth.js'
 import { HttpError, type Db } from './db/client.js'
 import { deleteSecret, getSecret, setSecret } from './secrets.js'
+import { deliveryConfig, promoActive } from './delivery.js'
 import { getSetting } from './services.js'
 
 // ---------------------------------------------------------------- Prompts editables
@@ -63,12 +64,13 @@ export async function ensureDefaultPrompts(db: Db) {
 async function liveFacts(db: Db) {
   const shop = await getSetting(db, 'shop')
   const print = await getSetting(db, 'print')
-  const { rows: zones } = await db.query('SELECT name, fee FROM delivery_zones WHERE active ORDER BY name')
+  const dcfg = await deliveryConfig(db)
+  const { rows: ownRates } = await db.query(`SELECT c.name, r.price FROM delivery_rates r JOIN geo_cities c ON c.id = r.city_id WHERE r.price IS NOT NULL AND c.active AND r.covered ORDER BY c.name LIMIT 40`)
   const { rows: cats } = await db.query(`SELECT DISTINCT category FROM products WHERE active AND online_visible AND kind = 'product' ORDER BY 1`)
   const gs = (n: number) => 'Gs. ' + Number(n).toLocaleString('es-PY')
   return [
     `Local: ${shop.name ?? 'Librería Samantha'}. Dirección: ${shop.address || 'sin cargar'}. Horarios: ${shop.hours || 'sin cargar'}. WhatsApp: ${shop.whatsapp || 'sin cargar'}.`,
-    zones.length ? `Zonas de delivery: ${zones.map((z) => `${z.name} (${gs(z.fee)})`).join('; ')}.` : 'Zonas de delivery: todavía no hay zonas cargadas.',
+    dcfg.enabled ? `Delivery a todo el país: tarifa general ${gs(dcfg.baseFee)} en cualquier ciudad${ownRates.length ? `; tarifa propia en ${ownRates.map((z) => `${z.name} (${gs(Number(z.price))})`).join(', ')}` : ''}.${promoActive(dcfg) ? ` Promoción: delivery gratis en compras desde ${gs(dcfg.freeFrom!)}${dcfg.promoEnd ? ' hasta el ' + dcfg.promoEnd : ''}.` : ''}` : 'El delivery está pausado por ahora: solo retiro.',
     `Categorías de la tienda: ${cats.map((c) => c.category).join(', ') || 'sin productos'}.`,
     `Tarifas de impresión por hoja: blanco y negro ${gs(print.bw ?? 0)}, color ${gs(print.color ?? 0)}. Terminaciones por copia: ${Object.entries(print.finishing ?? {}).map(([k, v]) => `${k} ${gs(Number(v))}`).join(', ')}.`,
   ].join('\n')

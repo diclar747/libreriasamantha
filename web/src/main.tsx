@@ -22,12 +22,13 @@ import Sales from './pages/Sales'
 import Suppliers from './pages/Suppliers'
 import WorkOrders from './pages/WorkOrders'
 import Orders from './pages/Orders'
+import Delivery from './pages/Delivery'
 import Accounting from './pages/Accounting'
 import Automation from './pages/Automation'
 import Settings from './pages/Settings'
 import Prompts from './pages/Prompts'
 import Reports from './pages/Reports'
-import Finance from './pages/Finance'
+import Finance, { ExpensesPage } from './pages/Finance'
 import Inventory from './pages/Inventory'
 import ScanPhone from './pages/ScanPhone'
 import { AskProvider } from './ui'
@@ -41,8 +42,8 @@ import './storefront.css'
 type Item = [path: string, label: string, icon: IconName]
 const NAV: { group: string; items: Item[] }[] = [
   { group: '', items: [['/admin', 'Panel', 'home']] },
-  { group: 'Venta', items: [['/pos', 'Punto de venta', 'pos'], ['/sales', 'Ventas', 'receipt'], ['/cash', 'Caja', 'wallet'], ['/orders', 'Pedidos en línea', 'bag'], ['/workorders', 'Impresiones', 'print']] },
-  { group: 'Dinero', items: [['/finanzas', 'Dinero y gastos', 'transfer'], ['/reports', 'Reportes', 'receipt']] },
+  { group: 'Venta', items: [['/pos', 'Punto de venta', 'pos'], ['/sales', 'Ventas', 'receipt'], ['/cash', 'Caja', 'wallet'], ['/orders', 'Pedidos en línea', 'bag'], ['/delivery', 'Delivery', 'truck'], ['/workorders', 'Impresiones', 'print']] },
+  { group: 'Dinero', items: [['/finanzas', 'Dinero y cuentas', 'transfer'], ['/gastos', 'Gastos', 'receipt'], ['/reports', 'Reportes', 'receipt']] },
   { group: 'Inventario', items: [['/products', 'Productos e inventario', 'box'], ['/inventory', 'Conteo de inventario', 'camera'], ['/purchases', 'Compras', 'truck'], ['/suppliers', 'Proveedores', 'factory']] },
   { group: 'Gestión', items: [['/customers', 'Clientes y crédito', 'users'], ['/accounting', 'Contabilidad', 'book'], ['/automation', 'Automatización', 'bolt'], ['/prompts', 'Asistente con IA', 'sparkle'], ['/settings', 'Configuración', 'gear']] },
 ]
@@ -52,8 +53,8 @@ const BOTTOM_PRIORITY = ['/admin', '/pos', '/orders', '/products', '/purchases',
 
 const PAGES: [string, React.ReactElement][] = [
   ['/pos', <Pos />], ['/sales', <Sales />], ['/products', <Products />], ['/purchases', <Purchases />], ['/suppliers', <Suppliers />],
-  ['/customers', <Customers />], ['/cash', <Cash />], ['/workorders', <WorkOrders />], ['/orders', <Orders />],
-  ['/accounting', <Accounting />], ['/finanzas', <Finance />], ['/reports', <Reports />], ['/inventory', <Inventory />], ['/automation', <Automation />], ['/prompts', <Prompts />], ['/settings', <Settings />],
+  ['/customers', <Customers />], ['/cash', <Cash />], ['/workorders', <WorkOrders />], ['/orders', <Orders />], ['/delivery', <Delivery />],
+  ['/accounting', <Accounting />], ['/finanzas', <Finance />], ['/gastos', <ExpensesPage />], ['/reports', <Reports />], ['/inventory', <Inventory />], ['/automation', <Automation />], ['/prompts', <Prompts />], ['/settings', <Settings />],
 ]
 
 function Login() {

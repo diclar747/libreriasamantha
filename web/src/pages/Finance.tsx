@@ -109,7 +109,7 @@ function Accounts() {
 }
 
 // ------------------------------------------------------------------ Gastos
-function Expenses() {
+export function Expenses() {
   const { toast } = useApp()
   const ask = useAsk()
   const cats = useQuery<any[]>('/expense-categories')
@@ -132,6 +132,10 @@ function Expenses() {
   return (
     <div className="stack">
       <div className="grid cols-4"><Kpi label="Gastos del filtro" value={gs(rows.filter((e) => e.status !== 'void').reduce((a, e) => a + Number(e.amount), 0))} /><Kpi label="Pendiente de pago" value={gs(totalOpen)} tone="warn" /><Kpi label="Vencidos" value={rows.filter((e) => e.overdue).length} tone="bad" /></div>
+      <div className="card"><b>Registrar gasto rápido</b>
+        <div className="row" style={{ flexWrap: 'wrap', marginTop: 8 }}>
+          {['Luz', 'Agua', 'Teléfono e internet', 'Alquiler', 'Sueldos y remuneraciones', 'Impuestos y tasas', 'Limpieza y mantenimiento', 'Publicidad y marketing', 'Combustible', 'Otros gastos'].map((n) => { const c = flat.find((x) => x.name === n); return c ? <button key={n} className="small" onClick={() => setForm({ categoryId: c.id, concept: n, beneficiary: '', amount: 0, expenseDate: today(), dueDate: '', documentNumber: '', notes: '', pay: false, method: 'cash', accountId: '', reference: '' })}>{n}</button> : null })}
+          <button className="small" onClick={() => setCatForm({ name: '', parentId: '' })}>+ Otra categoría</button></div></div>
       <div className="card">
         <div className="toolbar">
           <Field label="Estado"><select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="">Todos</option><option value="open">Pendientes</option><option value="paid">Pagados</option><option value="void">Anulados</option></select></Field>
@@ -257,6 +261,16 @@ export default function Finance() {
       <div className="head"><div><h1>Dinero y gastos</h1><span className="muted">Movimientos, cuentas, gastos y liquidaciones</span></div></div>
       <Tabs value={tab} onChange={(t) => setSp({ tab: t })} tabs={[['movimientos', 'Movimientos'], ['cuentas', 'Cuentas y bancos'], ['gastos', 'Gastos'], ['liquidaciones', 'Liquidaciones y cheques']]} />
       {tab === 'movimientos' && <Movements />}{tab === 'cuentas' && <Accounts />}{tab === 'gastos' && <Expenses />}{tab === 'liquidaciones' && <Settlements />}
+    </>
+  )
+}
+
+// Pantalla propia de gastos (luz, agua, teléfono, alquiler, sueldos…), con acceso directo en el menú.
+export function ExpensesPage() {
+  return (
+    <>
+      <div className="head"><div><h1>Gastos</h1><span className="muted">Registrá luz, agua, teléfono, alquiler, sueldos y todo gasto del negocio, por categoría</span></div></div>
+      <Expenses />
     </>
   )
 }

@@ -191,52 +191,6 @@ function Proofs({ onChange }: { onChange: () => void }) {
   )
 }
 
-function Delivery() {
-  const { toast } = useApp()
-  const [f, setF] = useState({ q: '', department: '', covered: '' })
-  const q = useDebounced(f.q)
-  const data = useQuery<any>('/delivery/cities?' + qs({ ...f, q }))
-  const shop = useQuery<any>('/settings/shop')
-  const [base, setBase] = useState<number | null>(null)
-  const [sel, setSel] = useState<number[]>([])
-  const [edit, setEdit] = useState<any>(null)
-  const [bulk, setBulk] = useState<any>(null)
-  const cities: any[] = data.data?.cities ?? []
-  const baseFee = base ?? data.data?.baseFee ?? 30000
-  const act = async (fn: () => Promise<any>, ok: string) => { try { await fn(); toast(ok); data.reload(); return true } catch (e: any) { toast(e.message, true); return false } }
-  return (
-    <div className="stack">
-      <div className="card"><div className="toolbar"><Field label="Tarifa base de delivery" hint="Se aplica en las ciudades que no tienen tarifa propia"><Money value={baseFee} onChange={setBase} /></Field>
-        <Field label="Horas de reserva para transferencias"><input type="number" min={1} max={168} style={{ width: 120 }} defaultValue={shop.data?.transferReserveHours ?? 24} onBlur={(e) => act(() => api('/settings/shop', { method: 'PUT', body: { transferReserveHours: Number(e.target.value) } }), 'Guardado')} /></Field>
-        <button className="primary" disabled={base == null} onClick={() => act(() => api('/settings/shop', { method: 'PUT', body: { baseDeliveryFee: base } }), 'Tarifa base actualizada').then(() => setBase(null))}>Guardar tarifa base</button></div></div>
-      <div className="card">
-        <div className="toolbar"><Field label="Buscar ciudad"><input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} /></Field>
-          <Field label="Departamento"><select value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}><option value="">Todos</option>{(data.data?.departments ?? []).map((d: string) => <option key={d}>{d}</option>)}</select></Field>
-          <Field label="Cobertura"><select value={f.covered} onChange={(e) => setF({ ...f, covered: e.target.value })}><option value="">Todas</option><option value="1">Con delivery</option><option value="0">Sin delivery</option></select></Field>
-          <span className="spacer" /><button disabled={!sel.length} onClick={() => setBulk({ covered: true, price: '' })}>Cambiar seleccionadas ({sel.length})</button><button onClick={() => setEdit({ create: true, department: '', name: '', covered: true, price: null, eta: '', notes: '', special_zones: [] })}>Agregar ciudad</button></div>
-        <div className="table-wrap"><table><thead><tr><th><input type="checkbox" style={{ width: 'auto' }} checked={cities.length > 0 && sel.length === cities.length} onChange={(e) => setSel(e.target.checked ? cities.map((c) => c.id) : [])} /></th><th>Ciudad</th><th>Departamento</th><th>Delivery</th><th className="num">Tarifa</th><th>Plazo</th><th>Zonas especiales</th><th /></tr></thead>
-          <tbody>{cities.map((c) => <tr key={c.id} style={c.active ? undefined : { opacity: .5 }}><td><input type="checkbox" style={{ width: 'auto' }} checked={sel.includes(c.id)} onChange={(e) => setSel(e.target.checked ? [...sel, c.id] : sel.filter((x) => x !== c.id))} /></td><td><b>{c.name}</b></td><td>{c.department}</td>
-            <td><label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={c.covered} onChange={(e) => act(() => api(`/delivery/cities/${c.id}`, { method: 'PUT', body: { covered: e.target.checked } }), e.target.checked ? 'Delivery activado' : 'Delivery desactivado')} />{c.covered ? 'Sí' : 'No'}</label></td>
-            <td className="num">{c.covered ? <>{gs(c.fee)}{c.price == null && <span className="muted"> (base)</span>}</> : '—'}</td><td>{c.eta ?? ''}</td><td>{(c.special_zones ?? []).map((z: any) => `${z.name}: ${gs(z.fee)}`).join(' · ')}</td><td><button className="small" onClick={() => setEdit({ ...c, eta: c.eta ?? '', notes: c.notes ?? '' })}>Editar</button></td></tr>)}
-            {!cities.length && <EmptyRow cols={8} />}</tbody></table></div>
-      </div>
-      {edit && <Modal title={edit.create ? 'Agregar ciudad' : `Delivery a ${edit.name}`} onClose={() => setEdit(null)} wide footer={<><button onClick={() => setEdit(null)}>Cancelar</button><button className="primary" onClick={async () => {
-        const body = { covered: edit.covered, price: edit.price ?? null, eta: edit.eta || null, notes: edit.notes || null, specialZones: (edit.special_zones ?? []).filter((z: any) => z.name), active: edit.active }
-        if (await act(() => edit.create ? api('/delivery/cities', { body: { ...body, department: edit.department, name: edit.name } }) : api(`/delivery/cities/${edit.id}`, { method: 'PUT', body }), 'Guardado')) setEdit(null) }}>Guardar</button></>}>
-        <div className="form">{edit.create && <><Field label="Departamento"><input value={edit.department} onChange={(e) => setEdit({ ...edit, department: e.target.value })} /></Field><Field label="Ciudad"><input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field></>}
-          <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={edit.covered} onChange={(e) => setEdit({ ...edit, covered: e.target.checked })} /> Se hace delivery</label>
-          <Field label="Tarifa propia" hint={`Vacío = tarifa base (${gs(baseFee)})`}><Money value={edit.price} onChange={(n) => setEdit({ ...edit, price: n || null })} /></Field>
-          <Field label="Plazo estimado"><input value={edit.eta} onChange={(e) => setEdit({ ...edit, eta: e.target.value })} placeholder="Mismo día, 2 a 3 días…" /></Field><Field label="Notas" span={2}><input value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field></div>
-        <h3>Barrios o zonas con tarifa especial</h3>
-        {(edit.special_zones ?? []).map((z: any, i: number) => <div className="row" key={i}><input placeholder="Barrio o zona" value={z.name} onChange={(e) => setEdit({ ...edit, special_zones: edit.special_zones.map((x: any, j: number) => (j === i ? { ...x, name: e.target.value } : x)) })} /><Money style={{ width: 140 }} value={z.fee} onChange={(n) => setEdit({ ...edit, special_zones: edit.special_zones.map((x: any, j: number) => (j === i ? { ...x, fee: n } : x)) })} /><button className="small danger" onClick={() => setEdit({ ...edit, special_zones: edit.special_zones.filter((_: any, j: number) => j !== i) })}>✕</button></div>)}
-        <div><button className="small" onClick={() => setEdit({ ...edit, special_zones: [...(edit.special_zones ?? []), { name: '', fee: 0 }] })}>+ Agregar zona</button></div>
-      </Modal>}
-      {bulk && <Modal title={`Cambiar ${sel.length} ciudades`} onClose={() => setBulk(null)} footer={<><button onClick={() => setBulk(null)}>Cancelar</button><button className="primary" onClick={async () => { if (await act(() => api('/delivery/cities/bulk', { body: { ids: sel, covered: bulk.covered, ...(bulk.price !== '' ? { price: bulk.price || null } : {}) } }), 'Ciudades actualizadas')) { setBulk(null); setSel([]) } }}>Aplicar</button></>}>
-        <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={bulk.covered} onChange={(e) => setBulk({ ...bulk, covered: e.target.checked })} /> Se hace delivery</label>
-        <Field label="Tarifa" hint="Dejá vacío para no cambiarla; 0 = usar la tarifa base"><Money value={bulk.price === '' ? 0 : bulk.price} onChange={(n) => setBulk({ ...bulk, price: n })} /></Field></Modal>}
-    </div>
-  )
-}
 
 function Coupons() {
   const { toast } = useApp()
@@ -279,7 +233,7 @@ export default function Orders() {
       <div className="grid cols-4" style={{ marginBottom: 14 }}>
         {chip('Pendientes de revisión', c?.pending, { stage: 'pending' }, 'warn')}{chip('En preparación', c?.preparing, { stage: 'preparing' })}{chip('Pendientes de entrega', c?.to_deliver, { stage: 'shipped', todo: '1' }, 'warn')}{chip('Con demora', c?.late, { late: '1' }, 'danger')}
       </div>
-      <Tabs value={tab} onChange={(t) => setSp({ tab: t })} tabs={[['pedidos', 'Pedidos'], ['comprobantes', 'Comprobantes de transferencia', c?.in_review], ['devoluciones', 'Devoluciones', c?.returns], ['metricas', 'Métricas'], ...(admin ? [['entrega', 'Delivery por ciudad'] as ['entrega', string], ['cupones', 'Cupones'] as ['cupones', string]] : [])]} />
+      <Tabs value={tab} onChange={(t) => setSp({ tab: t })} tabs={[['pedidos', 'Pedidos'], ['comprobantes', 'Comprobantes de transferencia', c?.in_review], ['devoluciones', 'Devoluciones', c?.returns], ['metricas', 'Métricas'], ...(admin ? [['cupones', 'Cupones'] as ['cupones', string]] : [])]} />
       {tab === 'pedidos' && <div className="card">
         <div className="toolbar"><Field label="Buscar"><input value={f.q} onChange={set('q')} placeholder="N.º, nombre, teléfono, documento" /></Field>
           <Field label="Estado"><select value={f.stage} onChange={set('stage')}><option value="">Todos</option><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="preparing">En preparación</option><option value="ready">Listo (envío o retiro)</option><option value="shipped">Enviado / en camino</option><option value="delivered">Entregado / retirado</option><option value="cancelled">Cancelado</option></select></Field>
@@ -300,7 +254,6 @@ export default function Orders() {
       {tab === 'comprobantes' && <Proofs onChange={refresh} />}
       {tab === 'devoluciones' && <Returns onChange={refresh} />}
       {tab === 'metricas' && <Metrics />}
-      {tab === 'entrega' && admin && <Delivery />}
       {tab === 'cupones' && admin && <Coupons />}
       {open && <OrderDetail id={open} onClose={() => setOpen(null)} onChange={refresh} />}
     </>

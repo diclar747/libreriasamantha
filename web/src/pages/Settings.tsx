@@ -68,13 +68,8 @@ export default function Settings() {
           </>}
         </div>
         <div className="card">
-          <h2>Zonas de delivery</h2>
-          <table><tbody>{zones.map((z) => <tr key={z.id}><td>{z.name}</td><td className="num">{gs(z.fee)}</td></tr>)}</tbody></table>
-          <div className="row" style={{ marginTop: 10 }}>
-            <input placeholder="Zona" value={zone.name} onChange={(e) => setZone({ ...zone, name: e.target.value })} />
-            <input type="number" placeholder="Tarifa" value={zone.fee} onChange={(e) => setZone({ ...zone, fee: e.target.value })} style={{ width: 130 }} />
-            <button onClick={async () => { try { await api('/delivery-zones', { body: { name: zone.name, fee: Number(zone.fee) } }); setZone({ name: '', fee: '' }); loadZones() } catch (e: any) { toast(e.message, true) } }}>Agregar</button>
-          </div>
+          <h2>Delivery</h2>
+          <p className="muted" style={{ margin: 0 }}>La tarifa general (Gs. 30.000 por defecto), el precio de cada departamento y ciudad, el delivery gratis y los plazos se configuran en el módulo <Link to="/delivery">Delivery</Link>.</p>
         </div>
       </div>
     </>

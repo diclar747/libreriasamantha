@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { aiCredentials, assembleKnowledge, NIRO_URL, niroChat, type Turn } from './ai.js'
 import { chatReply } from './chatbot.js'
 import { HttpError, type Db } from './db/client.js'
-import { baseFee, quoteCity } from './delivery.js'
+import { deliveryConfig, promoActive, quoteCity } from './delivery.js'
 import { sortCategories } from './categories.js'
 import { couponFor, createOrder, orderInput } from './orders.js'
 import { flowFor, stageOf, STAGE_TEXT } from './orderflow.js'
@@ -243,21 +243,23 @@ const TOOLS: Record<string, { schema: z.ZodTypeAny; run: (ctx: Ctx, a: any) => P
     schema: z.object({ city: z.string().max(80).nullish() }),
     run: async (ctx, a) => {
       const { rows: banks } = await ctx.db.query(`SELECT bank_name, holder FROM money_accounts WHERE kind = 'bank' AND active AND online_enabled`)
-      const { rows: zones } = await ctx.db.query('SELECT name, fee FROM delivery_zones WHERE active ORDER BY name')
-      const { rows: covered } = await ctx.db.query(`SELECT c.name, c.department, r.price, r.eta FROM delivery_rates r JOIN geo_cities c ON c.id = r.city_id WHERE r.covered AND c.active ORDER BY c.name LIMIT 60`)
+      const cfg = await deliveryConfig(ctx.db)
+      const { rows: own } = await ctx.db.query(`SELECT c.name, c.department, r.price, r.eta, r.free_mode, r.free_from FROM delivery_rates r JOIN geo_cities c ON c.id = r.city_id WHERE c.active AND r.covered AND (r.price IS NOT NULL OR r.free_mode <> 'global') ORDER BY c.name LIMIT 60`)
+      const { rows: off } = await ctx.db.query(`SELECT c.name FROM delivery_rates r JOIN geo_cities c ON c.id = r.city_id WHERE c.active AND NOT r.covered ORDER BY c.name LIMIT 40`)
+      const cartSub = subtotalOf(await cartLines(ctx))
       const out: Json = {
         retiro_en_local: { disponible: true, costo: 'sin costo', direccion: ctx.shop.address || null, horarios: ctx.shop.hours || null },
-        tarifa_base_delivery: await baseFee(ctx.db),
+        delivery: cfg.enabled ? { tarifa_general: cfg.baseFee, texto: `Se cobra ${gs(cfg.baseFee)} en cualquier ciudad que no tenga tarifa propia.`, plazo_general: cfg.defaultEta, promocion_delivery_gratis: promoActive(cfg) ? { desde_compra: cfg.freeFrom, hasta: cfg.promoEnd } : null,
+          ciudades_con_tarifa_propia_o_regla: own.map((c) => ({ ciudad: c.name, departamento: c.department, costo: c.price != null ? Number(c.price) : 'tarifa general', plazo: c.eta, gratis: c.free_mode === 'always' ? 'siempre' : c.free_mode === 'amount' ? `desde ${gs(Number(c.free_from))}` : c.free_mode === 'never' ? 'no aplica la promoción' : null })),
+          ciudades_sin_delivery: off.map((c) => c.name) } : { pausado: true, texto: 'El delivery está pausado por ahora: solo retiro en el local.' },
         formas_de_pago: [{ id: 'bancard', texto: PAY_LABEL.bancard }, ...(banks.length ? [{ id: 'transfer', texto: PAY_LABEL.transfer, bancos: banks.map((b) => b.bank_name) }] : []), ...(ctx.shop.codEnabled ? [{ id: 'cod', texto: PAY_LABEL.cod + ' (solo delivery)' }] : [])],
         reserva_de_stock: { tarjeta_minutos: ctx.shop.reserveMinutes ?? 30, transferencia_horas: ctx.shop.transferReserveHours ?? 24 },
-        zonas_de_delivery: zones.map((z) => ({ zona: z.name, costo: Number(z.fee) })),
-        ciudades_con_tarifa_propia: covered.map((c) => ({ ciudad: c.name, departamento: c.department, costo: c.price != null ? Number(c.price) : null, plazo: c.eta })),
       }
       if (a.city) {
         const found = await resolveCity(ctx.db, a.city)
         if (!found.length) out.consulta_ciudad = { ciudad: a.city, resultado: 'No encontré esa ciudad en la lista de entregas.' }
         else if (found.length > 1 && norm(found[0].name) !== norm(a.city)) out.consulta_ciudad = { ciudad: a.city, resultado: 'Hay varias coincidencias, preguntale cuál es', opciones: found.map((f) => `${f.name} (${f.department})`) }
-        else { const q = await quoteCity(ctx.db, found[0].id); out.consulta_ciudad = { ciudad: q.city, departamento: q.department, entrega: q.covered ? 'sí' : 'no', costo: q.fee, plazo: q.eta, notas: q.notes } }
+        else { const q = await quoteCity(ctx.db, found[0].id, undefined, cartSub || undefined); out.consulta_ciudad = { ciudad: q.city, departamento: q.department, entrega: q.covered ? 'sí' : 'no', costo: q.fee, tarifa_sin_promocion: q.baseFee, delivery_gratis: q.freeReason !== null, le_faltan_para_delivery_gratis: q.missingForFree, plazo: q.eta, notas: q.notes } }
       }
       return out
     },
@@ -289,8 +291,11 @@ const TOOLS: Record<string, { schema: z.ZodTypeAny; run: (ctx: Ctx, a: any) => P
           cityId = found[0].id
         }
         if (!address || address.trim().length < 5) throw new ToolError('Falta la dirección de entrega (calle, número y una referencia).')
-        const q = await quoteCity(ctx.db, cityId!)
-        if (!q.covered) throw new ToolError(`Todavía no hacemos entregas en ${q.city}. Puede retirar en el local.`)
+        const sub0 = subtotalOf(lines)
+        let disc0 = 0
+        if (a.coupon) { try { disc0 = (await couponFor(ctx.db, a.coupon, sub0)).discount } catch { disc0 = 0 } }
+        const q = await quoteCity(ctx.db, cityId!, undefined, sub0 - disc0)
+        if (!q.covered) throw new ToolError(`Por ahora no hacemos entregas en ${q.city}. Puede elegir otra ciudad o retirar en el local.`)
         cityName = q.city; fee = q.fee; eta = q.eta
       }
       if (a.payment === 'cod' && (!ctx.shop.codEnabled || a.delivery !== 'delivery')) throw new ToolError('El pago contra entrega no está disponible para este pedido.')

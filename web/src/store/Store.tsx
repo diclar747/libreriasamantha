@@ -393,12 +393,13 @@ function Checkout() {
   const [addrs, setAddrs] = useState<any[]>([])
   const [addrId, setAddrId] = useState<string>('')
   const [newAddr, setNewAddr] = useState(false)
-  const [f, setF] = useState({ name: '', phone: '', email: '', ruc: '', billName: '', method: 'pickup', cityId: '', zone: '', address: '', reference: '', neighborhood: '', pay: 'bancard', coupon: '', recName: '', recPhone: '', other: false })
+  const [f, setF] = useState({ name: '', phone: '', email: '', ruc: '', billName: '', method: 'delivery', cityId: '', zone: '', address: '', reference: '', neighborhood: '', pay: 'bancard', coupon: '', recName: '', recPhone: '', other: false })
   const [quote, setQuote] = useState<any>(null)
   const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [idem] = useState(() => uid())
+  const [dep, setDep] = useState('')
   useSeo('Finalizar compra — Librería Samantha', 'Completá tus datos y pagá online')
   useEffect(() => { shop('/cities').then(setCities).catch(() => {}); shop('/payment-options').then(setOpts).catch(() => {}) }, [])
   // con cuenta, los datos se completan solos y se pueden revisar o cambiar antes de confirmar
@@ -410,14 +411,17 @@ function Checkout() {
   const saved = addrs.find((a) => String(a.id) === addrId)
   const useSaved = f.method === 'delivery' && !!saved && !newAddr
   const cityId = useSaved ? String(saved.cityId ?? '') : f.cityId
+  const discount = coupon?.discount ?? 0
+  // El costo lo calcula el servidor con la ciudad y el importe de la compra (para saber si corresponde delivery gratis).
   useEffect(() => {
     if (f.method !== 'delivery' || !cityId) { setQuote(null); return }
-    shop('/delivery/quote?cityId=' + cityId + (f.zone ? '&zone=' + encodeURIComponent(f.zone) : '')).then(setQuote).catch(() => setQuote(null))
-  }, [f.method, cityId, f.zone])
+    shop(`/delivery/quote?cityId=${cityId}&subtotal=${Math.max(total - discount, 0)}` + (f.zone ? '&zone=' + encodeURIComponent(f.zone) : '')).then(setQuote).catch(() => setQuote(null))
+  }, [f.method, cityId, f.zone, total, discount])
   const fee = f.method === 'delivery' && quote?.covered ? Number(quote.fee) : 0
-  const discount = coupon?.discount ?? 0
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value })
-  const covered = cities.filter((c) => c.covered)
+  const deps = [...new Set(cities.map((c) => c.department as string))]
+  const depLabel = (d: string) => (d === 'Capital' ? 'Capital (Asunción)' : d)
+  const covered = cities.filter((c) => !dep || c.department === dep)
   const addressText = useSaved ? `${saved.street} ${saved.houseNumber ?? ''}`.trim() : f.address
   const deliveryOk = f.method === 'pickup' || (quote?.covered && addressText.trim().length >= 5)
   const rec = useSaved ? { name: saved.recipientName, phone: saved.recipientPhone } : { name: f.other ? f.recName : null, phone: f.other ? f.recPhone : null }
@@ -456,12 +460,13 @@ function Checkout() {
           <label>RUC o CI para la factura (opcional)<input value={f.ruc} onChange={set('ruc')} /></label>
           {f.ruc && <label>Nombre o razón social en la factura<input value={f.billName} onChange={set('billName')} /></label>}
         </div>
-        <label>Entrega<select value={f.method} onChange={set('method')}><option value="pickup">Retiro en el local (gratis, sin dirección)</option><option value="delivery">Delivery a domicilio</option></select></label>
+        <label>Entrega<select value={f.method} onChange={set('method')}><option value="delivery">Delivery a domicilio</option><option value="pickup">Retiro en el local (gratis, sin dirección)</option></select></label>
         {f.method === 'delivery' && profile && addrs.length > 0 && !newAddr && <div className="acc-stack-s"><b>Dirección de entrega</b>
           {addrs.map((a) => <label key={a.id} className="inline acc-bank" style={{ cursor: 'pointer' }}><input type="radio" style={{ width: 'auto' }} checked={String(a.id) === addrId} onChange={() => setAddrId(String(a.id))} /><span><b>{a.label || 'Dirección'}</b> · {a.street} {a.houseNumber}, {[a.neighborhood, a.cityName].filter(Boolean).join(', ')}{a.recipientName ? ` · recibe ${a.recipientName}` : ''}</span></label>)}
           <button className="small" onClick={() => setNewAddr(true)}>Usar otra dirección</button></div>}
         {f.method === 'delivery' && (!profile || !addrs.length || newAddr) && <div className="form">
-          <label>Ciudad<select value={f.cityId} onChange={(e) => setF({ ...f, cityId: e.target.value, zone: '' })}><option value="">Elegir…</option>{covered.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.department}) — {gs(c.fee)}</option>)}</select></label>
+          <label>Departamento<select value={dep} onChange={(e) => { setDep(e.target.value); setF({ ...f, cityId: '', zone: '' }) }}><option value="">Elegir departamento…</option>{deps.map((d) => <option key={d} value={d}>{depLabel(d)}</option>)}</select></label>
+          <label>Ciudad<select value={f.cityId} disabled={!dep} onChange={(e) => setF({ ...f, cityId: e.target.value, zone: '' })}><option value="">{dep ? 'Elegir ciudad…' : 'Primero elegí el departamento'}</option>{covered.map((c) => <option key={c.id} value={c.id}>{c.name} — {gs(c.fee)}</option>)}</select></label>
           {quote?.specialZones?.length > 0 && <label>Barrio o zona<select value={f.zone} onChange={set('zone')}><option value="">Otro barrio</option>{quote.specialZones.map((z: any) => <option key={z.name} value={z.name}>{z.name} — {gs(z.fee)}</option>)}</select></label>}
           <label>Barrio<input value={f.neighborhood} onChange={set('neighborhood')} /></label>
           <label>Calle y número<input value={f.address} onChange={set('address')} placeholder="Calle, número de casa" /></label>
@@ -469,8 +474,11 @@ function Checkout() {
           <label className="inline" style={{ gridColumn: '1 / -1' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.other} onChange={(e) => setF({ ...f, other: e.target.checked })} /> Lo recibe otra persona</label>
           {f.other && <><label>Nombre de quien recibe<input value={f.recName} onChange={set('recName')} /></label><label>Teléfono de quien recibe<input value={f.recPhone} onChange={set('recPhone')} /></label></>}
           {newAddr && <button className="small" onClick={() => setNewAddr(false)}>Volver a mis direcciones</button>}
-          <p className="muted" style={{ gridColumn: '1 / -1', margin: 0 }}>¿Tu ciudad no aparece? Todavía no llegamos: podés retirar en el local o escribirnos por WhatsApp.</p></div>}
-        {f.method === 'delivery' && quote && <p className="muted" style={{ margin: 0 }}>Envío a {quote.city}: <b>{gs(quote.fee)}</b>{quote.eta ? ` · ${quote.eta}` : ''}{quote.notes ? ` · ${quote.notes}` : ''}</p>}
+          <p className="muted" style={{ gridColumn: '1 / -1', margin: 0 }}>Hacemos delivery a todo el país. ¿No encontrás tu ciudad? Escribinos por WhatsApp.</p></div>}
+        {f.method === 'delivery' && quote && (quote.covered
+          ? <div className={'acc-banner' + (quote.free ? ' ok' : '')} style={{ margin: 0 }}>Envío a <b>{quote.city}</b>: {quote.free ? <><b>¡Gratis!</b> <s className="muted">{gs(quote.baseFee)}</s></> : <b>{gs(quote.fee)}</b>}{quote.eta ? ` · ${quote.eta}` : ''}{quote.notes ? ` · ${quote.notes}` : ''}
+              {!quote.free && quote.missingForFree > 0 && <><br />Sumá {gs(quote.missingForFree)} más a tu compra y el delivery es gratis.</>}</div>
+          : <p className="pill bad" style={{ padding: 10, margin: 0 }}>Por ahora no hacemos entregas en {quote.city}. Elegí otra ciudad o retirá en el local.</p>)}
         <div><b>Forma de pago</b>
           <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
             <label className="inline"><input type="radio" style={{ width: 'auto' }} checked={f.pay === 'bancard'} onChange={() => setF({ ...f, pay: 'bancard' })} /> Tarjeta de crédito o débito (pago seguro en línea){opts?.card?.demo ? <span className="pill warn">modo de prueba</span> : null}</label>
@@ -484,7 +492,7 @@ function Checkout() {
         <h2>Resumen</h2>
         {items.map((i) => <div key={i.id} className="st-line"><span>{i.qty} x {i.name}</span><b>{gs(i.price * i.qty)}</b></div>)}
         {discount > 0 && <div className="st-line"><span>Descuento</span><b>−{gs(discount)}</b></div>}
-        <div className="st-line"><span>Envío</span><b>{f.method === 'delivery' && !quote ? 'Elegí tu ciudad' : gs(fee)}</b></div>
+        <div className="st-line"><span>Envío</span><b>{f.method === 'delivery' && !quote ? 'Elegí tu ciudad' : quote?.free && f.method === 'delivery' ? 'Gratis' : gs(fee)}</b></div>
         <div className="st-line"><b>Total</b><b className="st-price">{gs(total - discount + fee)}</b></div>
         <p className="muted">{f.pay === 'transfer' ? 'Reservamos tu pedido por un tiempo para que hagas la transferencia y subas el comprobante.' : f.pay === 'cod' ? 'Pagás en efectivo cuando recibís tu pedido. Lo confirmamos antes de enviarlo.' : 'Reservamos tu stock mientras pagás. Al confirmarse el pago te avisamos por WhatsApp.'}</p>
         <button className="primary" disabled={busy || f.name.length < 2 || f.phone.length < 6 || !deliveryOk} onClick={submit}>{busy ? 'Procesando…' : f.pay === 'bancard' ? 'Pagar ahora' : 'Confirmar pedido'}</button>
