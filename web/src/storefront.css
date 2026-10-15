@@ -197,8 +197,6 @@
   .sf-band h3 { font-size: 28px; }
   .sf-band .sf-btn { width: 100%; }
   .st-foot { grid-template-columns: 1fr; padding-bottom: 110px; }
-  .st-bottom a.active { background: var(--brand-soft); color: var(--brand-text); box-shadow: none; }
-  .st-bottom-cart b { background: var(--gold); }
 }
 @media (prefers-reduced-motion: reduce) { .sf-hero-art img { animation: none; } }
 
@@ -227,10 +225,39 @@
 @media (prefers-reduced-motion: reduce) { .pwa-banner, .pwa-toast { animation: none; } }
 @media (display-mode: standalone) { .sf-util { padding-top: calc(9px + env(safe-area-inset-top)); } }
 
-/* Barra inferior de la tienda en teléfono: 5 accesos en una sola fila */
+/* ---- Barra de navegación tipo app (teléfono): una sola barra fija abajo, con íconos */
+.st-bottom { display: none !important; }
+.sf-tabbar, .sf-sheet-backdrop { display: none; }
 @media (max-width: 719px) {
-  .st-bottom { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding-inline: 8px; }
-  .st-bottom a, .st-bottom-cart { display: grid; place-items: center; min-height: 48px; padding: 6px 2px; border-radius: 12px; border: 0; box-shadow: none; background: none; font: 650 12px/1.2 var(--font-body); color: var(--muted); text-decoration: none; text-align: center; }
-  .st-bottom-cart { cursor: pointer; }
-  .st-bottom-cart b { margin: 2px 0 0; padding: 0 7px; border-radius: 99px; color: #fff; font-size: 11px; }
+  .st { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .sf-tabbar { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: rgb(255 253 246 / 96%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--border); box-shadow: 0 -10px 30px -18px rgb(60 40 8 / 38%); }
+  .sf-tab { position: relative; display: grid; justify-items: center; align-content: center; gap: 3px; min-height: 54px; padding: 6px 2px 4px; border: 0; border-radius: 14px; background: none; box-shadow: none; color: var(--muted); font: 600 11px/1.1 var(--font-body); text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .18s; }
+  .sf-tab svg { stroke-width: 1.7; transition: transform .2s; }
+  .sf-tab:active svg { transform: scale(.88); }
+  .sf-tab.on { color: var(--gold); }
+  .sf-tab.on svg { stroke-width: 2.1; }
+  .sf-tab.on::before { content: ''; position: absolute; top: -7px; left: 50%; width: 26px; height: 3px; margin-left: -13px; border-radius: 0 0 4px 4px; background: var(--gold); }
+  .sf-tab-ico { position: relative; display: grid; }
+  .sf-tab-ico b { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: var(--gold); color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; line-height: 1; border: 2px solid #fffdf6; box-sizing: content-box; }
+  /* el asistente flota sobre la barra */
+  .st-chat-fab { bottom: calc(84px + env(safe-area-inset-bottom)) !important; right: 12px !important; }
+  .pwa-banner { bottom: calc(80px + env(safe-area-inset-bottom)); }
+
+  .sf-sheet-backdrop { display: block; position: fixed; inset: 0; z-index: 90; background: rgb(30 22 6 / 52%); backdrop-filter: blur(3px); animation: sf-fade .2s ease-out both; }
+  .sf-sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; padding: 8px 18px calc(22px + env(safe-area-inset-bottom)); background: #fffdf6; border-radius: 24px 24px 0 0; box-shadow: 0 -20px 50px -20px rgb(30 22 6 / 45%); animation: sf-sheet .3s cubic-bezier(.2, .8, .2, 1) both; }
+  .sf-sheet-grip { display: block; width: 44px; height: 5px; margin: 0 auto 10px; border-radius: 99px; background: #e2d6b6; }
+  .sf-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sf-sheet-head h2 { margin: 0; font-size: 32px; }
+  .sf-sheet-head button { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-2); font-size: 24px; line-height: 1; box-shadow: none; }
+  .sf-sheet-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .sf-sheet-cats a { display: grid; gap: 2px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff; text-decoration: none; color: var(--text); }
+  .sf-sheet-cats a b { font-size: 15.5px; }
+  .sf-sheet-cats a small { font-size: 12px; color: var(--muted); }
+  .sf-sheet-cats a.on { border-color: var(--gold); background: var(--brand-soft); }
+  .sf-sheet-more { display: grid; margin-top: 16px; border-top: 1px solid var(--border); }
+  .sf-sheet-more a { display: flex; align-items: center; gap: 14px; padding: 15px 4px; border-bottom: 1px solid var(--border); color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; }
+  .sf-sheet-more a svg { color: var(--gold); flex: none; }
 }
+@keyframes sf-sheet { from { transform: translateY(100%); } }
+@keyframes sf-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sf-sheet, .sf-sheet-backdrop { animation: none; } }

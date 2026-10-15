@@ -110,6 +110,11 @@ const SF: Record<string, string> = {
   chat: 'M4 20l1.3-4A8 8 0 1 1 8.2 18.7L4 20z',
   insta: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17.5 6.5h.01',
   arrow: 'M5 12h14M13 6l6 6-6 6',
+  home: 'M3 11.5L12 4l9 7.5M5.5 10v10h4.5v-6h4v6h4.5V10',
+  grid: 'M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z',
+  list: 'M5 6h14M5 12h14M5 18h14',
+  print: 'M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z',
+  box: 'M3 8l9-4.5L21 8v8.5L12 21l-9-4.5V8zM3 8l9 4.5M21 8l-9 4.5M12 12.5V21',
 }
 function SfIcon({ n, size = 22 }: { n: string; size?: number }) {
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={SF[n] ?? SF.bag} /></svg>
@@ -151,6 +156,9 @@ function Layout({ children }: { children: ReactNode }) {
   const [cats, setCats] = useState<any[]>([])
   const [all, setAll] = useState<any[]>([])
   const [term, setTerm] = useState('')
+  const [sheet, setSheet] = useState(false)
+  useEffect(() => { setSheet(false) }, [loc.pathname, loc.search])
+  useEffect(() => { if (!sheet) return; const k = (e: KeyboardEvent) => e.key === 'Escape' && setSheet(false); window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [sheet])
   useEffect(() => { shop('/info').then(setInfo).catch(() => {}); shop('/categories').then(setCats).catch(() => {}); loadAll().then(setAll) }, [])
   useEffect(() => { setTerm(sp.get('q') ?? '') }, [sp])
   const wa = info?.whatsapp?.replace(/\D/g, '')
@@ -186,13 +194,30 @@ function Layout({ children }: { children: ReactNode }) {
         {hasOffers && <Link to="/tienda?oferta=1" className={'sf-nl sf-offers' + (isHome && sp.get('oferta') ? ' on' : '')}><SfIcon n="tag" size={16} /> Ofertas</Link>}
       </nav>
       <main className={'st-main' + (isHome ? ' sf-full' : '')}>{children}</main>
-      <nav className="st-bottom" aria-label="Tienda">
-        <NavLink to="/tienda" end>Productos</NavLink>
-        <NavLink to="/tienda/listas">Listas</NavLink>
-        <NavLink to="/tienda/impresiones">Impresiones</NavLink>
-        <NavLink to={account}>{profile ? 'Mi cuenta' : 'Ingresar'}</NavLink>
-        <button className="st-bottom-cart" onClick={() => setOpen(true)}>Carrito{count > 0 && <b>{count}</b>}</button>
+      <nav className="sf-tabbar" aria-label="Navegación de la app">
+        <NavLink to="/tienda" end className={() => 'sf-tab' + (isHome && !filtered ? ' on' : '')}><SfIcon n="home" size={24} /><span>Inicio</span></NavLink>
+        <button className={'sf-tab' + (sheet || curCat ? ' on' : '')} onClick={() => setSheet(true)} aria-haspopup="dialog"><SfIcon n="grid" size={24} /><span>Categorías</span></button>
+        <button className="sf-tab sf-tab-cart" onClick={() => setOpen(true)} aria-label={`Carrito, ${count} productos`}><span className="sf-tab-ico"><SfIcon n="bag" size={24} />{count > 0 && <b>{count}</b>}</span><span>Carrito</span></button>
+        <NavLink to={profile ? '/tienda/cuenta/favoritos' : '/tienda/ingresar'} className={({ isActive }) => 'sf-tab' + (isActive && profile ? ' on' : '')}><SfIcon n="heart" size={24} /><span>Favoritos</span></NavLink>
+        <NavLink to={account} className={({ isActive }) => 'sf-tab' + (isActive && !loc.pathname.includes('favoritos') ? ' on' : '')}><SfIcon n="user" size={24} /><span>{profile ? 'Mi cuenta' : 'Ingresar'}</span></NavLink>
       </nav>
+      {sheet && <div className="sf-sheet-backdrop" onClick={() => setSheet(false)}>
+        <div className="sf-sheet" role="dialog" aria-label="Categorías y más" onClick={(e) => e.stopPropagation()}>
+          <span className="sf-sheet-grip" aria-hidden="true" />
+          <div className="sf-sheet-head"><h2>Categorías</h2><button onClick={() => setSheet(false)} aria-label="Cerrar">×</button></div>
+          <div className="sf-sheet-cats">
+            {cats.filter((c) => c.category !== 'Servicios').map((c) => <Link key={c.category} to={`/tienda?cat=${encodeURIComponent(c.category)}`} className={curCat === c.category ? 'on' : ''}><b>{c.category}</b><small>{CAT_SUB[c.category] ?? `${c.count} productos`}</small></Link>)}
+          </div>
+          <div className="sf-sheet-more">
+            {hasOffers && <Link to="/tienda?oferta=1"><SfIcon n="tag" size={20} /> Ofertas</Link>}
+            <Link to="/tienda/listas"><SfIcon n="list" size={20} /> Listas escolares</Link>
+            <Link to="/tienda/impresiones"><SfIcon n="print" size={20} /> Impresiones y fotocopias</Link>
+            <Link to={profile ? '/tienda/cuenta/pedidos' : '/tienda/pedido'}><SfIcon n="box" size={20} /> Mis pedidos</Link>
+            {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer"><SfIcon n="chat" size={20} /> Escribir por WhatsApp</a>}
+            <a href={INSTAGRAM} target="_blank" rel="noreferrer"><SfIcon n="insta" size={20} /> Instagram</a>
+          </div>
+        </div>
+      </div>}
       <footer className="st-foot">
         <div className="st-foot-brand"><LogoWord height={64} className="st-foot-word" /><p>Libros y regalos. Historias que transforman vidas. Envíos a todo el país.</p></div>
         <div><b>Tu compra</b><Link to="/tienda">Explorar productos</Link><Link to="/tienda/pedido">Seguir mi pedido</Link><Link to="/tienda/listas">Listas escolares</Link>{profile ? <Link to="/tienda/cuenta">Mi cuenta</Link> : <Link to="/tienda/registro">Crear mi cuenta</Link>}<Link to="/admin">Acceso del personal</Link></div>
