@@ -33,6 +33,7 @@ export function Bell() {
   const nav = useNavigate()
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<{ items: any[]; unread: number }>({ items: [], unread: 0 })
+  useEffect(() => { const n = (navigator as any); if (data.unread > 0) n.setAppBadge?.(data.unread)?.catch?.(() => {}); else n.clearAppBadge?.()?.catch?.(() => {}) }, [data.unread])
   const seen = useRef<number | null>(null)
   const ref = useOutside(() => setOpen(false))
 

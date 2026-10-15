@@ -1,20 +1,33 @@
 {
-  "name": "Librería Samantha — Tienda",
+  "id": "/tienda",
+  "name": "Samantha — Libros y regalos",
   "short_name": "Samantha",
-  "description": "Libros, útiles escolares y papelería. Retiro en el local o delivery.",
+  "description": "Libros y regalos. Historias que transforman vidas. Envíos a todo Paraguay.",
   "lang": "es-PY",
-  "start_url": "/tienda",
+  "dir": "ltr",
+  "start_url": "/tienda?source=pwa",
   "scope": "/tienda",
   "display": "standalone",
-  "background_color": "#fbf8f2",
-  "theme_color": "#25452f",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#fbf6e8",
+  "theme_color": "#2f4a2d",
+  "categories": ["shopping", "books", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "screenshots": [
+    { "src": "/screenshots/store-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "Inicio de la tienda con categorías y productos" },
+    { "src": "/screenshots/store-narrow.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Inicio en el teléfono" },
+    { "src": "/screenshots/store-cats.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Productos destacados" }
+  ],
   "shortcuts": [
-    { "name": "Listas escolares", "url": "/tienda/listas", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Seguir mi pedido", "url": "/tienda/pedido", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Biblias", "short_name": "Biblias", "url": "/tienda?cat=Biblias&source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Devocionales", "short_name": "Devocionales", "url": "/tienda?cat=Devocionales&source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Seguir mi pedido", "short_name": "Mi pedido", "url": "/tienda/pedido?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Listas escolares", "short_name": "Listas", "url": "/tienda/listas?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

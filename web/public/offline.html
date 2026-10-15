@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f4a2d"><title>Sin conexión — Samantha</title>
+<link rel="icon" href="/icons/icon-192.png">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: radial-gradient(700px 420px at 50% 0%, #f6e6c3, transparent 70%), #fbf6e8; color: #2b2218; text-align: center; }
+  main { width: min(440px, 100%); display: grid; gap: 14px; justify-items: center; }
+  img { width: min(300px, 78%); height: auto; }
+  h1 { margin: 6px 0 0; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 38px; font-weight: 600; line-height: 1.05; color: #2f4a2d; }
+  p { margin: 0; max-width: 32em; line-height: 1.55; color: #6b5d49; }
+  button { margin-top: 8px; padding: 15px 28px; border: 0; border-radius: 8px; background: #bd8a16; color: #fff; font: 700 16px system-ui, sans-serif; cursor: pointer; }
+  button:active { transform: translateY(1px); }
+  small { color: #8a7b64; }
+</style></head>
+<body><main>
+  <img src="/brand/samantha-lockup.png" alt="Samantha — Libros y regalos">
+  <h1>Sin conexión por ahora</h1>
+  <p>No pudimos conectarnos a internet. Revisá tu señal o el wifi y volvé a intentar. Lo que ya visitaste sigue disponible.</p>
+  <button onclick="location.reload()">Reintentar</button>
+  <small>Cuando vuelva la conexión, la app se actualiza sola.</small>
+</main>
+<script>addEventListener('online', () => location.reload())</script></body></html>

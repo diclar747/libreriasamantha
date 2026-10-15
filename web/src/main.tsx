@@ -7,7 +7,7 @@ import './responsive.css'
 import { AppProvider, canSee, useApp } from './api'
 import { Icon, type IconName } from './components/Icons'
 import { Avatar, Bell, UserMenu } from './components/Topbar'
-import { LogoMark } from './components/Logo'
+import { LogoLockup, LogoMark } from './components/Logo'
 import ThemePicker from './components/ThemePicker'
 import { api } from './api'
 import Profile from './pages/Profile'
@@ -64,7 +64,7 @@ function Login() {
   return (
     <div className="login">
       <form className="card" onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { await login(u, p) } catch (er: any) { toast(er.message, true) } finally { setBusy(false) } }}>
-        <div className="logo logo-login"><LogoMark size={56} /><span><small>Librería</small>Samantha</span></div>
+        <div className="logo-login"><span className="logo-plate"><LogoLockup width={250} /></span></div>
         <p className="muted" style={{ margin: 0 }}>Acceso para usuarios del sistema y administradores.</p>
         <label>Usuario<input value={u} onChange={(e) => setU(e.target.value)} autoFocus autoCapitalize="none" autoComplete="username" /></label>
         <label>Contraseña<input type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" /></label>
@@ -150,7 +150,7 @@ function Shell() {
   return (
     <div className={'shell' + (collapsed ? ' collapsed' : '')}>
       <nav className="side" aria-label="Principal">
-        <div className="logo"><LogoMark size={42} /><span><small>Librería</small>Samantha</span><button className="nav-toggle" onClick={toggleNav} aria-label={collapsed ? 'Expandir el menú' : 'Minimizar el menú'} title={collapsed ? 'Expandir menú' : 'Minimizar menú'}>{collapsed ? '»' : '«'}</button></div>
+        <div className="logo"><LogoMark size={44} /><span><small>Libros y regalos</small>Samantha</span><button className="nav-toggle" onClick={toggleNav} aria-label={collapsed ? 'Expandir el menú' : 'Minimizar el menú'} title={collapsed ? 'Expandir menú' : 'Minimizar menú'}>{collapsed ? '»' : '«'}</button></div>
         {groups.map((g) => (
           <div key={g.group || 'top'}>
             {g.group && <div className="group">{g.group}</div>}

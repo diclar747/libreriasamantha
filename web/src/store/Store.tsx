@@ -1,4 +1,5 @@
-import { LogoMark } from '../components/Logo'
+import { InstallBanner } from '../pwa'
+import { LogoWord } from '../components/Logo'
 import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -168,7 +169,7 @@ function Layout({ children }: { children: ReactNode }) {
         </nav>
       </div>
       <header className="sf-head">
-        <Link to="/tienda" className="sf-logo" aria-label="Librería Samantha, inicio"><LogoMark size={52} /><span><strong>Samantha</strong><small>Librería cristiana</small></span></Link>
+        <Link to="/tienda" className="sf-logo" aria-label="Samantha, libros y regalos — inicio"><LogoWord height={66} /></Link>
         <form className="sf-search" role="search" onSubmit={(e) => { e.preventDefault(); nav(term.trim() ? `/tienda?q=${encodeURIComponent(term.trim())}` : '/tienda') }}>
           <input aria-label="Buscar productos" placeholder="Buscar libros, Biblias, autores…" value={term} onChange={(e) => setTerm(e.target.value)} />
           <button aria-label="Buscar"><SfIcon n="search" size={20} /></button>
@@ -193,11 +194,12 @@ function Layout({ children }: { children: ReactNode }) {
         <button className="st-bottom-cart" onClick={() => setOpen(true)}>Carrito{count > 0 && <b>{count}</b>}</button>
       </nav>
       <footer className="st-foot">
-        <div className="st-foot-brand"><LogoMark size={52} className="st-foot-mark" /><div><b>{info?.name ?? 'Librería Samantha'}</b><p>Biblias, devocionales y libros para acompañar tu camino de fe. Envíos a todo el país.</p></div></div>
+        <div className="st-foot-brand"><LogoWord height={64} className="st-foot-word" /><p>Libros y regalos. Historias que transforman vidas. Envíos a todo el país.</p></div>
         <div><b>Tu compra</b><Link to="/tienda">Explorar productos</Link><Link to="/tienda/pedido">Seguir mi pedido</Link><Link to="/tienda/listas">Listas escolares</Link>{profile ? <Link to="/tienda/cuenta">Mi cuenta</Link> : <Link to="/tienda/registro">Crear mi cuenta</Link>}<Link to="/admin">Acceso del personal</Link></div>
         <div><b>Contacto</b>{info?.address && <span>{info.address}</span>}{info?.hours && <span>{info.hours}</span>}{wa && <a href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`} target="_blank" rel="noreferrer">Escribinos por WhatsApp</a>}<a href={INSTAGRAM} target="_blank" rel="noreferrer">Seguinos en Instagram</a></div>
       </footer>
       <ChatWidget />
+      <InstallBanner />
     </div>
   )
 }
@@ -227,7 +229,7 @@ function ProductCard({ p }: { p: any }) {
 }
 
 function Home() {
-  useSeo('Librería Samantha — Biblias, devocionales y libros cristianos', 'Biblias, devocionales, libros para niños, mujeres, hombres y matrimonios. Comprá en línea con envíos a todo Paraguay.')
+  useSeo('Samantha — Libros y regalos | Historias que transforman vidas', 'Biblias, devocionales, libros y regalos cristianos para niños, mujeres, hombres y matrimonios. Comprá en línea con envíos a todo Paraguay.')
   const [sp] = useSearchParams()
   const q = sp.get('q') ?? ''
   const cat = sp.get('cat') ?? ''
