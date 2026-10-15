@@ -1,6 +1,6 @@
 /** Marca de Samantha: la S dorada sobre verde (ícono), el nombre con el libro abierto y el logo completo con el lema. */
 export function LogoMark({ size = 40, className = '' }: { size?: number; className?: string }) {
-  return <img className={'logo-mark ' + className} src="/icons/icon-192.png" width={size} height={size} alt="" decoding="async" />
+  return <img className={'logo-mark ' + className} src="/icons/samantha-192-v2.png" width={size} height={size} alt="" decoding="async" />
 }
 /** SAMANTHA en letras doradas con el libro abierto. */
 export function LogoWord({ height = 64, className = '' }: { height?: number; className?: string }) {

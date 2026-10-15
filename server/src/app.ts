@@ -120,7 +120,17 @@ Sitemap: ${PUBLIC_URL()}/sitemap.xml
 
   const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url))
   if (existsSync(webDist)) {
-    app.register(fastifyStatic, { root: webDist })
+    // Caché: lo versionado (assets con hash) para siempre; el service worker, el manifiesto y las páginas se revalidan siempre,
+    // así una app instalada o un teléfono nunca se queda con el ícono o los archivos viejos.
+    app.register(fastifyStatic, {
+      root: webDist,
+      setHeaders: (res, filePath) => {
+        const p = filePath.replace(/\\/g, '/')
+        if (p.includes('/assets/')) res.header('Cache-Control', 'public, max-age=31536000, immutable')
+        else if (/\/(sw\.js|offline\.html|index\.html)$|\.webmanifest$/.test(p)) res.header('Cache-Control', 'no-cache')
+        else if (/\/(icons|brand|splash|screenshots|images)\//.test(p)) res.header('Cache-Control', 'public, max-age=86400')
+      },
+    })
     app.setNotFoundHandler((req, reply) =>
       req.url.startsWith('/api') ? reply.code(404).send({ error: 'No encontrado' }) : reply.sendFile('index.html'))
   }

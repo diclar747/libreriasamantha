@@ -1,9 +1,9 @@
 // Service worker de Samantha: la app abre sin conexión, las fotos y el catálogo se guardan para verlos de nuevo
 // y las actualizaciones se avisan al usuario. Nunca guarda datos de la administración (todo /api/ autenticado).
-const VERSION = 'samantha-v4'
+const VERSION = 'samantha-v5'
 const SHELL = `shell-${VERSION}`, ASSETS = `assets-${VERSION}`, IMAGES = `img-${VERSION}`, API = `api-${VERSION}`
 const CURRENT = [SHELL, ASSETS, IMAGES, API]
-const PRECACHE = ['/', '/tienda', '/offline.html', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/brand/samantha-lockup.png', '/brand/samantha-wordmark.png', '/manifest-store.webmanifest', '/manifest-admin.webmanifest']
+const PRECACHE = ['/', '/tienda', '/offline.html', '/favicon.svg', '/icons/samantha-192-v2.png', '/icons/samantha-512-v2.png', '/brand/samantha-lockup.png', '/brand/samantha-wordmark.png', '/manifest-store.webmanifest?v=2', '/manifest-admin.webmanifest?v=2']
 const PUBLIC_API = /^\/api\/shop\/(info|categories|products|zones|school-lists)/
 const DEV = new URL(self.location).searchParams.has('dev') // en desarrollo no se guarda nada en caché
 
@@ -58,6 +58,7 @@ self.addEventListener('fetch', (e) => {
     }
     if (req.mode === 'navigate') { e.respondWith(navigate(e)); return }
     if (url.pathname.startsWith('/assets/')) { e.respondWith(cacheFirst(req, ASSETS)); return }
+    if (url.pathname.endsWith('.webmanifest')) { e.respondWith(networkFirst(req, ASSETS)); return } // el manifiesto siempre fresco
     if (/^\/(icons|brand|images|splash|screenshots)\//.test(url.pathname) || /\.(webmanifest|svg)$/.test(url.pathname)) { e.respondWith(staleWhileRevalidate(req, ASSETS)); return }
     return
   }
@@ -69,7 +70,7 @@ self.addEventListener('push', (e) => {
   let d = {}
   try { d = e.data ? e.data.json() : {} } catch { d = { title: 'Samantha', body: e.data ? e.data.text() : '' } }
   e.waitUntil(self.registration.showNotification(d.title || 'Samantha', {
-    body: d.body || '', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: d.tag, data: { url: d.url || '/' },
+    body: d.body || '', icon: '/icons/samantha-192-v2.png', badge: '/icons/samantha-96-v2.png', tag: d.tag, data: { url: d.url || '/' },
   }))
 })
 self.addEventListener('notificationclick', (e) => {

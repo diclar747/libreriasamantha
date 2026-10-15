@@ -8,25 +8,132 @@
   "start_url": "/admin?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#12163f",
   "theme_color": "#12163f",
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/samantha-96-v2.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-144-v2.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-256-v2.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-384-v2.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-maskable-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/samantha-maskable-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "screenshots": [
-    { "src": "/screenshots/admin-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "Panel con ventas e indicadores" },
-    { "src": "/screenshots/admin-narrow.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Panel en el teléfono" }
+    {
+      "src": "/screenshots/admin-wide.webp",
+      "sizes": "1280x720",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Panel con ventas e indicadores"
+    },
+    {
+      "src": "/screenshots/admin-narrow.webp",
+      "sizes": "780x1688",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Panel en el teléfono"
+    }
   ],
   "shortcuts": [
-    { "name": "Punto de venta", "short_name": "Vender", "url": "/pos?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Pedidos en línea", "short_name": "Pedidos", "url": "/orders?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Caja", "short_name": "Caja", "url": "/cash?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Productos", "short_name": "Productos", "url": "/products?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    {
+      "name": "Punto de venta",
+      "short_name": "Vender",
+      "url": "/pos?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Pedidos en línea",
+      "short_name": "Pedidos",
+      "url": "/orders?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Caja",
+      "short_name": "Caja",
+      "url": "/cash?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Productos",
+      "short_name": "Productos",
+      "url": "/products?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

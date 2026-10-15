@@ -8,26 +8,140 @@
   "start_url": "/tienda?source=pwa",
   "scope": "/tienda",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#fbf6e8",
   "theme_color": "#2f4a2d",
-  "categories": ["shopping", "books", "lifestyle"],
+  "categories": [
+    "shopping",
+    "books",
+    "lifestyle"
+  ],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/samantha-96-v2.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-144-v2.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-256-v2.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-384-v2.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/samantha-maskable-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/samantha-maskable-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "screenshots": [
-    { "src": "/screenshots/store-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "Inicio de la tienda con categorías y productos" },
-    { "src": "/screenshots/store-narrow.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Inicio en el teléfono" },
-    { "src": "/screenshots/store-cats.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Productos destacados" }
+    {
+      "src": "/screenshots/store-wide.webp",
+      "sizes": "1280x720",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Inicio de la tienda con categorías y productos"
+    },
+    {
+      "src": "/screenshots/store-narrow.webp",
+      "sizes": "780x1688",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Inicio en el teléfono"
+    },
+    {
+      "src": "/screenshots/store-cats.webp",
+      "sizes": "780x1688",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Productos destacados"
+    }
   ],
   "shortcuts": [
-    { "name": "Biblias", "short_name": "Biblias", "url": "/tienda?cat=Biblias&source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Devocionales", "short_name": "Devocionales", "url": "/tienda?cat=Devocionales&source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Seguir mi pedido", "short_name": "Mi pedido", "url": "/tienda/pedido?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Listas escolares", "short_name": "Listas", "url": "/tienda/listas?source=shortcut", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    {
+      "name": "Biblias",
+      "short_name": "Biblias",
+      "url": "/tienda?cat=Biblias&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Devocionales",
+      "short_name": "Devocionales",
+      "url": "/tienda?cat=Devocionales&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Seguir mi pedido",
+      "short_name": "Mi pedido",
+      "url": "/tienda/pedido?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Listas escolares",
+      "short_name": "Listas",
+      "url": "/tienda/listas?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/samantha-192-v2.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

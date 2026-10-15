@@ -15,7 +15,7 @@ const isStore = (path: string) => path === '/' || path.startsWith('/tienda') || 
 const adminBarColor = () => { const t = document.documentElement.dataset.theme; return t === 'dark' ? '#0e1230' : t === 'warm' ? '#faf5ef' : '#f4f5fb' }
 function applyArea(path: string) {
   const store = isStore(path)
-  const href = store ? '/manifest-store.webmanifest' : '/manifest-admin.webmanifest'
+  const href = store ? '/manifest-store.webmanifest?v=2' : '/manifest-admin.webmanifest?v=2'
   let link = document.querySelector('link[rel=manifest]') as HTMLLinkElement | null
   if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link) }
   if (link.getAttribute('href') !== href) link.setAttribute('href', href)
