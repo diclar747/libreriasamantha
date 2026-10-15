@@ -178,3 +178,20 @@ th { background: var(--grad-soft); }
 /* Tarjetas de producto: el precio y el botón siempre al pie, alineados entre tarjetas */
 .st-card { display: flex; flex-direction: column; }
 .st-card .st-price { margin-top: auto; }
+
+/* ---- Comprá por categoría */
+.st-cats .st-section-head { margin-bottom: 14px; }
+.st-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.st-cat { position: relative; overflow: hidden; display: grid; align-content: end; gap: 2px; min-height: 132px; padding: 16px 16px 15px; border: 0; border-radius: 22px; text-align: left; color: #fff; background: linear-gradient(140deg, var(--c1), var(--c2)); box-shadow: 0 18px 32px -18px var(--c1); isolation: isolate; transition: transform .22s, box-shadow .22s; }
+.st-cat::before { content: ''; position: absolute; z-index: -1; right: -34px; top: -34px; width: 130px; height: 130px; border-radius: 50%; background: radial-gradient(circle, rgb(255 255 255 / 34%), transparent 68%); }
+.st-cat:hover { background: linear-gradient(140deg, var(--c1), var(--c2)); transform: translateY(-4px); box-shadow: 0 28px 40px -18px var(--c1); border-color: transparent; }
+.st-cat.on { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--c1), 0 24px 36px -16px var(--c1); }
+.st-cat-ico { position: absolute; left: 16px; top: 16px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: rgb(255 255 255 / 20%); backdrop-filter: blur(6px); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%); }
+.st-cat b { font-family: var(--font-display); font-size: 18px; letter-spacing: -.025em; line-height: 1.1; }
+.st-cat small { font-size: 12px; opacity: .85; }
+@media (max-width: 719px) {
+  .st-cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .st-cat { min-height: 112px; padding: 13px; border-radius: 18px; }
+  .st-cat-ico { width: 38px; height: 38px; left: 13px; top: 13px; border-radius: 12px; }
+  .st-cat b { font-size: 16px; }
+}

@@ -1,3 +1,4 @@
+import { sortCategories } from './categories.js'
 import type { FastifyInstance } from 'fastify'
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
@@ -262,7 +263,7 @@ export function shopView(r: any) {
 
 export function shopRoutes(app: FastifyInstance, db: Db) {
   app.get('/info', async () => ({ ...(await getSetting(db, 'shop')), managerPhone: undefined }))
-  app.get('/categories', async () => (await db.query(`SELECT category, COUNT(*)::int AS count FROM products WHERE active AND online_visible AND kind = 'product' GROUP BY 1 ORDER BY 1`)).rows)
+  app.get('/categories', async () => sortCategories((await db.query(`SELECT category, COUNT(*)::int AS count FROM products WHERE active AND online_visible AND kind = 'product' GROUP BY 1`)).rows, (r: any) => r.category))
   app.get('/products', async (req) => {
     const { q, category } = req.query as Record<string, string | undefined>
     const { rows } = await db.query(

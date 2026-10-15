@@ -1,4 +1,5 @@
 import { LogoMark } from '../components/Logo'
+import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { gs, useApp } from '../api'
@@ -15,7 +16,25 @@ async function shop<T = any>(path: string, body?: unknown): Promise<T> {
 }
 
 interface CartItem { id: number; name: string; price: number; qty: number; max: number; list?: number | null; image?: string | null }
-const visualCategory = (category?: string) => category === 'Libros' ? 'books' : category === 'Oficina' ? 'office' : 'school'
+// Cada categoría tiene su color e ícono (trazo de 24 px).
+const CAT_ART: Record<string, { d: string; c: [string, string] }> = {
+  'Biblias': { d: 'M4 5.5C4 4.7 4.7 4 5.5 4H11v15H5.5C4.7 19 4 18.3 4 17.5v-12zM20 5.5C20 4.7 19.3 4 18.5 4H13v15h5.5c.8 0 1.5-.7 1.5-1.5v-12z', c: ['#3b3fd8', '#7a3fc9'] },
+  'Devocionales': { d: 'M12 4v2M5.6 7.6L7 9M18.4 7.6L17 9M3 15h18M7 15a5 5 0 0 1 10 0M5 19h14', c: ['#ff9a6b', '#e0558f'] },
+  'Niños': { d: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM8.5 14c.9 1.4 2.1 2 3.5 2s2.6-.6 3.5-2M9 10h.01M15 10h.01', c: ['#22b8a6', '#4a8fe0'] },
+  'Adolescentes': { d: 'M13 3L5 13h6l-1 8 8-10h-6l1-8z', c: ['#8a45d6', '#e0558f'] },
+  'Jóvenes': { d: 'M3 19l6-10 4 6 2-3 6 7H3z', c: ['#2f8fe0', '#4a40d4'] },
+  'Mujeres': { d: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z', c: ['#e0558f', '#ff8fb3'] },
+  'Hombres': { d: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z', c: ['#1b2a8a', '#3a6ad6'] },
+  'Matrimonios': { d: 'M9 8a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM15 8a5 5 0 1 0 0 10 5 5 0 0 0 0-10z', c: ['#c451a8', '#ff9a6b'] },
+  'Agendas': { d: 'M5 6h14v14H5zM5 10h14M9 3v4M15 3v4', c: ['#f0a02a', '#ff7a6b'] },
+  'Libros': { d: 'M5 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4zM7 18h10', c: ['#4a40d4', '#2f8fe0'] },
+  'Regalos': { d: 'M4 10h16v10H4zM3 7h18v3H3zM12 7v13M12 7c-2 0-4-.5-4-2.2S10 3 12 7zM12 7c2 0 4-.5 4-2.2S14 3 12 7z', c: ['#e0558f', '#f0a02a'] },
+  'Útiles escolares': { d: 'M4 20l1-4L16 5l3 3L8 19l-4 1zM14 7l3 3', c: ['#1fa67a', '#5ad1b0'] },
+  'Oficina': { d: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16', c: ['#475569', '#64748b'] },
+}
+const catArt = (name: string) => CAT_ART[name] ?? CAT_ART['Libros']
+
+const visualCategory = (category?: string) => category === 'Oficina' ? 'office' : category === 'Útiles escolares' ? 'school' : 'books'
 const CartCtx = createContext<{ open: boolean; setOpen(o: boolean): void; items: CartItem[]; add(p: any, qty?: number): void; setQty(id: number, q: number): void; clear(): void; total: number; count: number }>(null as never)
 const useCart = () => useContext(CartCtx)
 
@@ -167,7 +186,18 @@ function Home() {
         <div className="st-hero-art"><img src="/images/hero-cristiano.png" alt="Biblia abierta, libros y una cruz cristiana sencilla" /></div>
       </section>
       <div className="st-benefits"><div><span className="st-benefit-icon">✦</span><span><b>Elegí con calma</b><small>Todo lo que buscás en un solo lugar</small></span></div><div><span className="st-benefit-icon">↗</span><span><b>Comprá en línea</b><small>Pagá y seguí tu pedido fácilmente</small></span></div><div><span className="st-benefit-icon">⌂</span><span><b>Como prefieras</b><small>Retiro en el local o delivery</small></span></div></div>
-      <div className="st-section-head"><div><span className="st-section-kicker">NUESTRA SELECCIÓN</span><h2>Descubrí lo que te inspira</h2></div><span>Explorá por categoría o buscá tu favorito</span></div>
+      <section className="st-cats" aria-label="Categorías">
+        <div className="st-section-head"><div><h2>Comprá por categoría</h2></div><span>Para cada persona y cada momento</span></div>
+        <div className="st-cat-grid">
+          {cats.filter((c) => !['Servicios'].includes(c.category)).map((c) => { const a = catArt(c.category); return (
+            <button key={c.category} className={'st-cat' + (cat === c.category ? ' on' : '')} style={{ '--c1': a.c[0], '--c2': a.c[1] } as React.CSSProperties}
+              onClick={() => { setCat(c.category); setTimeout(() => document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60) }}>
+              <span className="st-cat-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={a.d} /></svg></span>
+              <b>{c.category}</b><small>{c.count} {c.count === 1 ? 'producto' : 'productos'}</small>
+            </button>) })}
+        </div>
+      </section>
+      <div id="catalogo" className="st-section-head"><div><span className="st-section-kicker">NUESTRA SELECCIÓN</span><h2>Descubrí lo que te inspira</h2></div><span>Explorá por categoría o buscá tu favorito</span></div>
       <div className="st-chips">
         <button className={!cat ? 'primary' : ''} onClick={() => setCat('')}>Todo</button>
         {cats.filter((c) => !['Servicios'].includes(c.category)).map((c) => <button key={c.category} className={cat === c.category ? 'primary' : ''} onClick={() => setCat(c.category)}>{c.category}</button>)}

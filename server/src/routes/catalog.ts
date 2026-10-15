@@ -1,3 +1,4 @@
+import { allCategories, sortCategories } from '../categories.js'
 import { createHash } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
@@ -254,7 +255,7 @@ export function catalogRoutes(app: FastifyInstance, db: Db) {
   app.get('/products/categories', async (req) => {
     requirePerm(req, 'products.read')
     const { rows } = await db.query('SELECT DISTINCT category FROM products WHERE active ORDER BY 1')
-    return rows.map((r) => r.category)
+    return sortCategories(rows.map((r) => r.category), (c: string) => c)
   })
   app.get('/products/facets', async (req) => {
     requirePerm(req, 'products.read')
@@ -264,7 +265,7 @@ export function catalogRoutes(app: FastifyInstance, db: Db) {
       db.query('SELECT DISTINCT brand AS v FROM products WHERE brand IS NOT NULL ORDER BY 1'),
       db.query('SELECT DISTINCT unnest(ARRAY[sale_unit, purchase_unit]) AS v FROM products ORDER BY 1'),
     ])
-    return { categories: cats.rows.map((r) => r.v), subcategories: subs.rows, brands: brands.rows.map((r) => r.v), units: langs.rows.map((r) => r.v) }
+    return { categories: allCategories(cats.rows.map((r) => r.v)), subcategories: subs.rows, brands: brands.rows.map((r) => r.v), units: langs.rows.map((r) => r.v) }
   })
 
   // Búsqueda exacta por lector (código, código de barras, ISBN, QR, código interno).

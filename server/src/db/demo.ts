@@ -49,23 +49,31 @@ function iconSvg(kind: string, i: number) {
 }
 
 // Catálogo de ejemplo adicional (se crea solo si el código no existe)
-const BOOKS: [string, string, string, number, number][] = [
-  ['LIB-BIB-NVI', 'Santa Biblia Nueva Versión Internacional', 'Sociedad Bíblica', 145000, 85000],
-  ['LIB-001', 'El Peregrino', 'John Bunyan', 68000, 38000],
-  ['LIB-002', 'Mero Cristianismo', 'C. S. Lewis', 79000, 45000],
-  ['LIB-003', 'Cartas del Diablo a su Sobrino', 'C. S. Lewis', 72000, 41000],
-  ['LIB-004', 'Un Propósito Divino', 'Rick Warren', 85000, 50000],
-  ['LIB-005', 'Devocional Diario', 'Charles Spurgeon', 59000, 33000],
-  ['LIB-006', 'La Cabaña', 'William P. Young', 92000, 54000],
-  ['LIB-007', 'Los Cinco Lenguajes del Amor', 'Gary Chapman', 76000, 43000],
+// [código, nombre, autor, precio, costo, categoría, subcategoría]
+const BOOKS: [string, string, string | null, number, number, string, string][] = [
+  ['LIB-BIB-NVI', 'Santa Biblia Nueva Versión Internacional', 'Sociedad Bíblica', 145000, 85000, 'Biblias', 'Nueva Versión Internacional'],
+  ['BIB-RV60', 'Biblia Reina Valera 1960 tapa dura', 'Sociedad Bíblica', 165000, 98000, 'Biblias', 'Reina Valera 1960'],
+  ['BIB-NIN', 'Biblia ilustrada para niños', null, 89000, 52000, 'Niños', 'Biblias infantiles'],
+  ['NIN-DEV', 'Devocional para niños', null, 59000, 34000, 'Niños', 'Devocionales'],
+  ['ADO-DEV', 'Devocional para adolescentes', null, 64000, 37000, 'Adolescentes', 'Devocionales'],
+  ['JOV-DEV', 'Devocional para jóvenes', null, 69000, 40000, 'Jóvenes', 'Devocionales'],
+  ['MUJ-DEV', 'Devocional para la mujer de fe', null, 72000, 42000, 'Mujeres', 'Devocionales'],
+  ['HOM-DEV', 'Devocional para el hombre de fe', null, 72000, 42000, 'Hombres', 'Devocionales'],
+  ['MAT-DEV', 'Devocional para matrimonios', null, 78000, 45000, 'Matrimonios', 'Devocionales'],
+  ['LIB-007', 'Los Cinco Lenguajes del Amor', 'Gary Chapman', 76000, 43000, 'Matrimonios', 'Relaciones'],
+  ['LIB-005', 'Devocional Diario', 'Charles Spurgeon', 59000, 33000, 'Devocionales', 'Diarios'],
+  ['AGE-CRI', 'Agenda cristiana', null, 55000, 30000, 'Agendas', 'Agendas anuales'],
+  ['LIB-002', 'Mero Cristianismo', 'C. S. Lewis', 79000, 45000, 'Libros', 'Cristianos'],
+  ['LIB-004', 'Un Propósito Divino', 'Rick Warren', 85000, 50000, 'Libros', 'Cristianos'],
+  ['LIB-006', 'La Cabaña', 'William P. Young', 92000, 54000, 'Libros', 'Cristianos'],
 ]
 const STATIONERY: [string, string, string, number, number][] = [
   ['ESC-CAR-A4', 'Carpeta oficio con elástico', 'Útiles escolares', 18000, 9000],
   ['ESC-MAR-12', 'Marcadores de colores x12', 'Útiles escolares', 32000, 18000],
   ['ESC-GOM', 'Goma de borrar blanca', 'Útiles escolares', 3500, 1500],
 ]
-for (const [code, name, author, price, cost] of BOOKS) {
-  await db.query(`INSERT INTO products (code, name, category, subcategory, author, price, cost, tax_rate, min_stock, stock, online_visible, language) VALUES ($1,$2,'Libros','Cristianos',$3,$4,$5,5,3,15,true,'Español') ON CONFLICT (code) DO NOTHING`, [code, name, author, price, cost])
+for (const [code, name, author, price, cost, category, subcategory] of BOOKS) {
+  await db.query(`INSERT INTO products (code, name, category, subcategory, author, price, cost, tax_rate, min_stock, stock, online_visible, language) VALUES ($1,$2,$3,$4,$5,$6,$7,5,3,15,true,'Español') ON CONFLICT (code) DO NOTHING`, [code, name, category, subcategory, author, price, cost])
 }
 for (const [code, name, cat, price, cost] of STATIONERY) {
   await db.query(`INSERT INTO products (code, name, category, price, cost, tax_rate, min_stock, stock, online_visible) VALUES ($1,$2,$3,$4,$5,10,5,40,true) ON CONFLICT (code) DO NOTHING`, [code, name, cat, price, cost])
@@ -74,12 +82,13 @@ for (const [code, name, cat, price, cost] of STATIONERY) {
 await db.query(`INSERT INTO stock_movements (product_id, type, qty, reason, stock_before, stock_after)
   SELECT p.id, 'opening', p.stock, 'Stock inicial de ejemplo', 0, p.stock FROM products p WHERE p.stock > 0 AND NOT EXISTS (SELECT 1 FROM stock_movements m WHERE m.product_id = p.id)`)
 
+const BOOK_CATS = new Set(['Libros', 'Biblias', 'Devocionales', 'Niños', 'Adolescentes', 'Jóvenes', 'Mujeres', 'Hombres', 'Matrimonios'])
 const { rows } = await db.query(`SELECT p.id, p.name, p.author, p.category, p.kind FROM products p WHERE NOT EXISTS (SELECT 1 FROM product_images i WHERE i.product_id = p.id) ORDER BY p.id`)
 let n = 0
 for (const [idx, p] of rows.entries()) {
   const lower = p.name.toLowerCase()
-  const svg = p.category === 'Libros' ? bookSvg(p.name, p.author, idx)
-    : iconSvg(/cuaderno|carpeta/.test(lower) ? 'notebook' : /l[aá]piz|marcador|goma/.test(lower) ? 'pencil' : /bol[ií]grafo/.test(lower) ? 'pen' : /resma|papel/.test(lower) ? 'paper' : /impres/.test(lower) ? 'printer' : /env[ií]o/.test(lower) ? 'truck' : 'box', idx)
+  const svg = BOOK_CATS.has(p.category) && !/agenda/.test(lower) ? bookSvg(p.name, p.author, idx)
+    : iconSvg(/cuaderno|carpeta|agenda/.test(lower) ? 'notebook' : /l[aá]piz|marcador|goma/.test(lower) ? 'pencil' : /bol[ií]grafo/.test(lower) ? 'pen' : /resma|papel/.test(lower) ? 'paper' : /impres/.test(lower) ? 'printer' : /env[ií]o/.test(lower) ? 'truck' : 'box', idx)
   const { data, info } = await sharp(Buffer.from(svg)).resize(1000, 1000).webp({ quality: 82 }).toBuffer({ resolveWithObject: true })
   const { rows: im } = await db.query(`INSERT INTO product_images (product_id, position, mime, data, width, height, size, source_url) VALUES ($1,0,'image/webp',$2,$3,$4,$5,'demo') RETURNING id`, [p.id, data, info.width, info.height, data.length])
   await db.query('UPDATE products SET image_url = $2 WHERE id = $1', [p.id, `/api/shop/img/${im[0].id}?s=md`])
