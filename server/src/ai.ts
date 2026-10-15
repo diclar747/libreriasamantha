@@ -10,18 +10,18 @@ import { getSetting } from './services.js'
 const DEFAULTS: { slug: string; title: string; kind: 'system' | 'rules' | 'knowledge'; sort: number; content: string }[] = [
   {
     slug: 'identidad', title: 'Identidad y tono', kind: 'system', sort: 10,
-    content: `Sos el asistente virtual de Librería Samantha, una librería y papelería de Paraguay que vende libros, útiles escolares y artículos de oficina, y ofrece servicios de impresión.
-Hablás en español paraguayo, tuteando con "vos", con un tono cálido, claro y breve. Respondés en pocas líneas, sin listas largas. Los precios se escriben en guaraníes con el formato "Gs. 12.000".
-Tu trabajo es ayudar a encontrar productos, informar precios y disponibilidad, explicar envíos y formas de pago, y guiar al cliente hasta armar su pedido.`,
+    content: `Sos el asistente virtual de Samantha — Libros y regalos, una librería cristiana de Paraguay. Vendemos Biblias, devocionales, libros para niños, adolescentes, jóvenes, mujeres, hombres y matrimonios, agendas, regalos, y también útiles escolares y de oficina. Hacemos envíos a todo el país. Nuestro lema: «historias que transforman vidas».
+Hablás en español paraguayo, tuteando con "vos", con un tono cálido, respetuoso y claro. Sos breve y concreto. Los precios se escriben en guaraníes con el formato "Gs. 12.000".
+Tu trabajo es ayudar a elegir productos, informar precios y disponibilidad, explicar envíos y formas de pago, y acompañar al cliente hasta tener su pedido y poder seguirlo.`,
   },
   {
     slug: 'reglas', title: 'Reglas que nunca se rompen', kind: 'rules', sort: 20,
-    content: `- Usá únicamente los datos del contexto (productos, precios, stock, zonas de entrega, información del local). Si no tenés un dato, decilo y ofrecé derivar con una persona del local.
+    content: `- Usá únicamente los datos del contexto y de las herramientas (productos, precios, stock, envíos, pedidos). Si no tenés un dato, decilo y ofrecé derivar con una persona del equipo por WhatsApp.
 - No inventes precios, stock, plazos ni promociones. No negocies descuentos ni hagas excepciones de precio.
-- Nunca confirmes que un pago fue recibido: el sistema lo confirma solo cuando el proveedor de pagos avisa.
-- No des datos de otros clientes, ni costos, ni información interna.
-- Para comprar, guiá al cliente a escribir "carrito" o "confirmar". Para ver un pedido, que escriba "estado" y el número.
-- Si el cliente está molesto o pide hablar con una persona, ofrecé el WhatsApp del local.`,
+- Nunca confirmes que un pago fue recibido: lo confirma el sistema cuando el proveedor de pagos avisa. Para saber si un pedido está pagado, consultá su estado.
+- No des datos de otros clientes, ni costos, ni información interna. Los datos de un pedido solo se muestran con sesión iniciada, o con el número de pedido más el código de seguimiento o el teléfono de la compra.
+- No pidas ni recibas contraseñas, números de tarjeta ni datos bancarios por chat.
+- Si el cliente está molesto o pide una devolución, una factura o hablar con una persona, ofrecé el WhatsApp del local.`,
   },
   {
     slug: 'envios', title: 'Envíos y delivery', kind: 'knowledge', sort: 30,
@@ -74,6 +74,16 @@ async function liveFacts(db: Db) {
   ].join('\n')
 }
 
+// Identidad, reglas y conocimiento del negocio (lo que se edita en «Asistente con IA») + datos vivos. Lo usa el agente de la tienda.
+export async function assembleKnowledge(db: Db) {
+  const { rows } = await db.query('SELECT * FROM ai_prompts WHERE active ORDER BY sort, id')
+  const block = (kind: string, head: string) => {
+    const items = rows.filter((r) => r.kind === kind)
+    return items.length ? `# ${head}\n` + items.map((r) => (kind === 'knowledge' ? `## ${r.title}\n${cleanPrompt(r.content)}` : r.content)).join('\n\n') : ''
+  }
+  return [block('system', 'Quién sos'), block('rules', 'Reglas del negocio'), block('knowledge', 'Información del negocio'), `# Datos actuales del negocio (siempre vigentes)\n${await liveFacts(db)}`].filter(Boolean).join('\n\n')
+}
+
 export async function assembleSystemPrompt(db: Db) {
   const { rows } = await db.query('SELECT * FROM ai_prompts WHERE active ORDER BY sort, id')
   const block = (kind: string, head: string) => {
@@ -123,13 +133,13 @@ function clientFor(apiKey: string, baseURL?: string) {
 }
 
 export interface AiResult { text: string; model: string; usage: { input: number; output: number } }
-type Turn = { role: 'user' | 'assistant'; content: string }
+export type Turn = { role: 'user' | 'assistant'; content: string }
 
 // Niro: POST /api/v1/chat/completions con Authorization: Bearer niro_… (formato OpenAI).
 // El modelo lo elige el Router de Niro con respaldo automático; por eso solo se envían los mensajes.
-async function niroChat(apiKey: string, baseUrl: string, system: string, turns: Turn[]): Promise<AiResult | null> {
+export async function niroChat(apiKey: string, baseUrl: string, system: string, turns: Turn[], timeoutMs = 30_000): Promise<AiResult | null> {
   const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), 30_000)
+  const timer = setTimeout(() => ctl.abort(), timeoutMs)
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/chat/completions`, {
       method: 'POST',

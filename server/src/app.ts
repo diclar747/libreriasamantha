@@ -14,8 +14,10 @@ import { workOrderRoutes } from './routes/workorders.js'
 import { accountingRoutes } from './accounting.js'
 import { serviceRoutes } from './services.js'
 import { orderAdminRoutes, printRequestRoutes, shopRoutes, webhookRoutes } from './orders.js'
+import { agentRoutes, runAgent } from './agent.js'
+import { getSetting } from './services.js'
 import { chatRoutes, testChat, winsapWebhookRoutes } from './chatbot.js'
-import { aiRoutes } from './ai.js'
+import { aiCredentials, aiRoutes } from './ai.js'
 import { profileRoutes } from './notifications.js'
 import { treasuryRoutes } from './routes/treasury.js'
 import { cashRoutes } from './routes/cash.js'
@@ -52,7 +54,7 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
     })
 
     // Rutas públicas (tienda, chat, webhooks): sin sesión de usuario.
-    api.register(async (pub) => { shopRoutes(pub, db); onlineShopRoutes(pub, db); scanPublicRoutes(pub, db); portalRoutes(pub, db); imageRoutes(pub, db); chatRoutes(pub, db); printRequestRoutes(pub, db) }, { prefix: '/shop' })
+    api.register(async (pub) => { shopRoutes(pub, db); onlineShopRoutes(pub, db); scanPublicRoutes(pub, db); portalRoutes(pub, db); imageRoutes(pub, db); chatRoutes(pub, db); agentRoutes(pub, db); printRequestRoutes(pub, db) }, { prefix: '/shop' })
     api.register(async (hooks) => { webhookRoutes(hooks, db); winsapWebhookRoutes(hooks, db) }, { prefix: '/webhooks' })
 
     api.register(async (priv) => {
@@ -93,7 +95,14 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
       orderRefundRoutes(priv, db)
       portalAdminRoutes(priv, db)
       scanRoutes(priv, db)
-      aiRoutes(priv, db, (m, u) => testChat(db, m, u))
+      // La prueba del área de prompts usa el mismo agente que la tienda (sin carrito ni sesión de cliente).
+      aiRoutes(priv, db, async (m, u) => {
+        if ((await getSetting(db, 'ai')).enabled && (await aiCredentials(db, 'niro'))) {
+          const out = await runAgent(db, { sid: `admin-test-${u}-prueba`, message: m, cart: [], account: null })
+          if (out.source === 'agent') return { reply: out.reply + (out.blocks.length ? `\n\n[Además muestra: ${[...new Set(out.blocks.map((b) => ({ products: 'tarjetas de productos', cart: 'el carrito', checkout: 'el resumen del pedido', order: 'el estado del pedido', orders: 'la lista de pedidos', links: 'botones' } as Record<string, string>)[b.type]))].join(', ')}]` : ''), source: 'ai' as const }
+        }
+        return testChat(db, m, u)
+      })
       profileRoutes(priv, db)
       treasuryRoutes(priv, db)
       cashRoutes(priv, db)

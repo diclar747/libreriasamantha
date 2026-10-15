@@ -36,7 +36,7 @@ const CAT_ART: Record<string, { d: string; c: [string, string] }> = {
 const catArt = (name: string) => CAT_ART[name] ?? CAT_ART['Libros']
 
 const visualCategory = (category?: string) => category === 'Oficina' ? 'office' : category === 'Útiles escolares' ? 'school' : 'books'
-const CartCtx = createContext<{ open: boolean; setOpen(o: boolean): void; items: CartItem[]; add(p: any, qty?: number): void; setQty(id: number, q: number): void; clear(): void; total: number; count: number }>(null as never)
+const CartCtx = createContext<{ open: boolean; setOpen(o: boolean): void; items: CartItem[]; add(p: any, qty?: number): void; setQty(id: number, q: number): void; clear(): void; replace(lines: { id: number; name: string; price: number; qty: number; max: number; list: number | null; image: string | null }[]): void; total: number; count: number }>(null as never)
 const useCart = () => useContext(CartCtx)
 
 function CartProvider({ children }: { children: ReactNode }) {
@@ -53,6 +53,8 @@ function CartProvider({ children }: { children: ReactNode }) {
     }) },
     setQty: (id: number, q: number) => setItems((c) => (q <= 0 ? c.filter((i) => i.id !== id) : c.map((i) => (i.id === id ? { ...i, qty: Math.min(q, i.max) } : i)))),
     clear: () => setItems([]),
+    // El asistente devuelve el carrito ya validado (precios y stock reales): se adopta tal cual, sin abrir el panel del carrito.
+    replace: (lines: any[]) => setItems((c) => { const next = lines.map((l) => ({ id: l.id, name: l.name, price: Number(l.price), qty: l.qty, max: l.max ?? 99, list: l.list ?? null, image: l.image ?? null })); return JSON.stringify(c.map((i) => [i.id, i.qty, i.price])) === JSON.stringify(next.map((i) => [i.id, i.qty, i.price])) ? c : next }),
     total: items.reduce((s, i) => s + i.price * i.qty, 0),
     count: items.reduce((s, i) => s + i.qty, 0),
   }), [items, open])
@@ -627,17 +629,122 @@ function PrintRequest() {
   )
 }
 
-const CHIPS = ['Biblias', 'Devocionales', 'Costos de envío', 'Formas de pago', 'Ver mi carrito']
-const CHAT_WELCOME = '¡Hola! Soy el asistente de Samantha. Te ayudo con Biblias, devocionales, regalos, precios, envíos y tu pedido. ¿Qué necesitás?'
-
-type ChatMsg = { from: 'me' | 'bot'; text: string; at: number; error?: boolean }
+const CHIPS = ['Biblias', 'Devocionales', 'Costos de envío', 'Formas de pago', 'Ver mi carrito', 'Seguir mi pedido']
+const CHAT_WELCOME = '¡Hola! Soy el asistente de Samantha. Te ayudo a elegir Biblias, devocionales y regalos, armar tu pedido, pagarlo y seguirlo. ¿Qué necesitás?'
+type ChatMsg = { from: 'me' | 'bot'; text: string; at: number; error?: boolean; blocks?: any[] }
 const hhmm = (t: number) => new Date(t).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })
+
+/** Conversa con el agente: la respuesta llega en líneas JSON (estados de progreso y resultado final). */
+async function callAgent(sid: string, payload: { message?: string; action?: any; cart: { id: number; qty: number }[] }, onStatus: (t: string) => void): Promise<any> {
+  let token: string | null = null
+  try { token = localStorage.getItem('samantha.ctoken') } catch { /* sin almacenamiento */ }
+  const res = await fetch('/api/shop/chat/agent', { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ sessionId: sid, ...payload }) })
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? `Error ${res.status}`) }
+  let fin: any = null
+  const eat = (line: string) => { if (!line.trim()) return; try { const ev = JSON.parse(line); if (ev.t === 'status') onStatus(ev.text); else if (ev.t === 'final') fin = ev } catch { /* línea incompleta */ } }
+  if (res.body) {
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = ''
+    for (;;) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); let i; while ((i = buf.indexOf('\n')) >= 0) { eat(buf.slice(0, i)); buf = buf.slice(i + 1) } }
+    eat(buf)
+  } else (await res.text()).split('\n').forEach(eat)
+  if (!fin) throw new Error('sin respuesta')
+  return fin
+}
+
+function ChatBlocks({ blocks, msgIndex, live, busy, act, say, go }: { blocks: any[]; msgIndex: number; live: { cart: number; checkout: number }; busy: boolean; act: (a: any) => void; say: (t: string) => void; go: (href: string, external?: boolean) => void }) {
+  return <div className="sf-blocks">{blocks.map((b, i) => {
+    switch (b.type) {
+      case 'products': return (
+        <div key={i} className="sf-pcards">{b.items.map((p: any) => (
+          <div key={p.id} className="sf-pcard">
+            <button className="sf-pcard-img" onClick={() => go(`/tienda/producto/${p.id}`)} aria-label={`Ver ${p.name}`}>{p.image ? <img src={p.image} alt="" loading="lazy" /> : <span>{p.name.slice(0, 1)}</span>}</button>
+            <b className="sf-pcard-name">{p.name}</b>
+            {p.author && <small>{p.author}</small>}
+            <div className="sf-pcard-price"><strong>{gs(p.price)}</strong>{p.list_price && <s>{gs(p.list_price)}</s>}</div>
+            {p.availability === 'low' && <em>Quedan pocas</em>}
+            {p.availability === 'out' ? <span className="sf-pill bad">Agotado</span> : <button className="sf-mini-primary" disabled={busy} onClick={() => act({ type: 'add', productId: p.id })}>Agregar</button>}
+          </div>))}
+        </div>)
+      case 'cart': {
+        const isLive = live.cart === msgIndex
+        if (!isLive) return <div key={i} className="sf-chip-note">Carrito: {b.count} {b.count === 1 ? 'producto' : 'productos'} · {gs(b.subtotal)}</div>
+        return (
+          <div key={i} className="sf-ccard">
+            <div className="sf-ccard-head"><b>Tu carrito</b><small>{b.count} {b.count === 1 ? 'producto' : 'productos'}</small></div>
+            {!b.lines.length && <p className="muted">Todavía no agregaste nada.</p>}
+            {b.lines.map((l: any) => (
+              <div key={l.id} className="sf-cline">
+                <span className="sf-cline-img">{l.image ? <img src={l.image} alt="" loading="lazy" /> : l.name.slice(0, 1)}</span>
+                <span className="sf-cline-info"><b>{l.name}</b><small>{gs(l.price)} c/u</small></span>
+                <span className="sf-step"><button disabled={busy} onClick={() => act({ type: 'set', productId: l.id, qty: l.qty - 1 })} aria-label="Restar">−</button><i>{l.qty}</i><button disabled={busy || l.qty >= l.max} onClick={() => act({ type: 'set', productId: l.id, qty: l.qty + 1 })} aria-label="Sumar">+</button></span>
+                <strong className="sf-cline-total">{gs(l.price * l.qty)}</strong>
+              </div>))}
+            {b.lines.length > 0 && <>
+              <div className="sf-ctotal"><span>Productos</span><strong>{gs(b.subtotal)}</strong></div>
+              <div className="sf-cactions"><button className="sf-mini-primary" disabled={busy} onClick={() => say('Quiero finalizar mi compra')}>Finalizar compra</button><button className="sf-mini-ghost" disabled={busy} onClick={() => act({ type: 'clear' })}>Vaciar</button></div></>}
+          </div>)
+      }
+      case 'checkout': {
+        const isLive = live.checkout === msgIndex && live.cart <= msgIndex + 1
+        return (
+          <div key={i} className={'sf-ocard' + (isLive ? '' : ' stale')}>
+            <div className="sf-ccard-head"><b>Resumen de tu pedido</b>{!isLive && <small>Ya no vigente</small>}</div>
+            {b.lines.map((l: any) => <div key={l.id} className="sf-oline"><span>{l.qty} × {l.name}</span><span>{gs(l.price * l.qty)}</span></div>)}
+            <div className="sf-oline sub"><span>Productos</span><span>{gs(b.subtotal)}</span></div>
+            {b.discount > 0 && <div className="sf-oline sub"><span>Descuento{b.coupon ? ` (${b.coupon})` : ''}</span><span>−{gs(b.discount)}</span></div>}
+            <div className="sf-oline sub"><span>{b.delivery.method === 'pickup' ? 'Retiro en el local' : `Envío a ${b.delivery.city}`}</span><span>{b.fee ? gs(b.fee) : 'Sin costo'}</span></div>
+            <div className="sf-oline total"><span>Total</span><span>{gs(b.total)}</span></div>
+            <dl className="sf-odata"><dt>Forma de pago</dt><dd>{b.payment.label}</dd>
+              {b.delivery.method === 'delivery' && <><dt>Entrega en</dt><dd>{b.delivery.address}{b.delivery.reference ? ` (${b.delivery.reference})` : ''}</dd>{b.delivery.eta && <><dt>Plazo</dt><dd>{b.delivery.eta}</dd></>}</>}
+              <dt>A nombre de</dt><dd>{b.customer.name} · {b.customer.phone}</dd></dl>
+            {isLive && <div className="sf-cactions"><button className="sf-mini-primary big" disabled={busy} onClick={() => act({ type: 'confirm_checkout', draftId: b.draftId })}>Confirmar pedido</button><button className="sf-mini-ghost" disabled={busy} onClick={() => act({ type: 'cancel_checkout' })}>Cambiar</button></div>}
+          </div>)
+      }
+      case 'order': {
+        const o = b.order
+        return (
+          <div key={i} className="sf-ocard">
+            <div className="sf-ccard-head"><b>Pedido {o.number}</b><span className={'sf-pill ' + (o.cancelled ? 'bad' : o.stage === 'delivered' || o.stage === 'picked_up' ? 'ok' : 'warn')}>{o.stageLabel}</span></div>
+            <ol className="sf-steps">{o.progress.map((p: any) => <li key={p.stage} className={(p.done ? 'done ' : '') + (p.current ? 'current' : '')}><i /><span>{p.label}</span></li>)}</ol>
+            <p className="sf-ostage">{o.stageText}</p>
+            {o.items.slice(0, 4).map((it: any, n: number) => <div key={n} className="sf-oline"><span>{it.qty} × {it.name}</span><span>{gs(it.price * it.qty)}</span></div>)}
+            {o.items.length > 4 && <div className="sf-oline sub"><span>y {o.items.length - 4} más</span><span /></div>}
+            {o.money.shipping > 0 && <div className="sf-oline sub"><span>Envío</span><span>{gs(o.money.shipping)}</span></div>}
+            <div className="sf-oline total"><span>Total</span><span>{gs(o.money.total)}</span></div>
+            <dl className="sf-odata">
+              <dt>Pago</dt><dd><span className={'sf-pill ' + (o.payment.status === 'approved' ? 'ok' : o.payment.status === 'rejected' ? 'bad' : 'warn')}>{o.payment.label}</span> · {o.payment.methodLabel}</dd>
+              <dt>Entrega</dt><dd>{o.delivery.method === 'pickup' ? 'Retiro en el local' : `Delivery${o.delivery.city ? ' a ' + o.delivery.city : ''}`}</dd>
+              {o.delivery.address && <><dt>Dirección</dt><dd>{o.delivery.address}</dd></>}
+              {o.delivery.carrier && <><dt>Transportista</dt><dd>{o.delivery.carrier}</dd></>}
+              {o.delivery.trackingNumber && <><dt>Guía</dt><dd>{o.delivery.trackingUrl ? <a href={o.delivery.trackingUrl} target="_blank" rel="noreferrer">{o.delivery.trackingNumber}</a> : o.delivery.trackingNumber}</dd></>}
+              {o.delivery.eta && <><dt>Llegada estimada</dt><dd>{o.delivery.eta}</dd></>}
+            </dl>
+            {o.pay?.kind === 'transfer' && o.pay.accounts?.length > 0 && <div className="sf-bank">{o.pay.accounts.slice(0, 2).map((a: any, n: number) => <div key={n}><b>{a.bank_name}</b><span>{a.holder}{a.holder_document ? ` · ${a.holder_document}` : ''}</span><span>{a.account_type ? a.account_type + ' · ' : ''}{a.account_number}{a.alias ? ` · alias ${a.alias}` : ''}</span></div>)}<small>Después de transferir, subí el comprobante en la página del pedido.</small></div>}
+            <div className="sf-cactions">
+              {o.pay?.kind === 'card' && <button className="sf-mini-primary big" onClick={() => go(o.pay.href)}>Pagar con tarjeta</button>}
+              <button className={o.pay?.kind === 'transfer' ? 'sf-mini-primary' : 'sf-mini-ghost'} onClick={() => go(o.link)}>{o.pay?.kind === 'transfer' ? 'Subir comprobante' : 'Ver pedido completo'}</button>
+            </div>
+          </div>)
+      }
+      case 'orders': return (
+        <div key={i} className="sf-ocard">
+          <div className="sf-ccard-head"><b>Tus pedidos</b></div>
+          {b.items.map((o: any) => <button key={o.number} className="sf-orow" disabled={busy} onClick={() => say('Ver el pedido ' + o.number)}><span><b>{o.number}</b><small>{new Date(o.createdAt).toLocaleDateString('es-PY')} · {o.units} {o.units === 1 ? 'producto' : 'productos'}</small></span><span className="sf-orow-r"><strong>{gs(o.total)}</strong><span className={'sf-pill ' + (o.stage === 'cancelled' ? 'bad' : o.stage === 'delivered' || o.stage === 'picked_up' ? 'ok' : 'warn')}>{o.stageLabel}</span></span></button>)}
+        </div>)
+      case 'links': return <div key={i} className="sf-links">{b.items.map((l: any, n: number) => <button key={n} className={l.primary ? 'sf-mini-primary' : 'sf-mini-ghost'} onClick={() => (l.action === 'open-cart' ? go('#cart') : go(l.href, l.external))}>{l.label}</button>)}</div>
+      default: return null
+    }
+  })}</div>
+}
 
 function ChatWidget() {
   const loc = useLocation()
+  const nav = useNavigate()
   const online = useOnline()
+  const cartCtx = useCart()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
   const [info, setInfo] = useState<any>(null)
   const [msgs, setMsgs] = useState<ChatMsg[]>(() => {
     try { const j = sessionStorage.getItem('samantha.chat.msgs'); if (j) { const m = JSON.parse(j); if (Array.isArray(m) && m.length) return m } } catch { /* sin almacenamiento */ }
@@ -648,8 +755,8 @@ function ChatWidget() {
   const box = useRef<HTMLDivElement>(null)
   const body = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => { try { sessionStorage.setItem('samantha.chat.msgs', JSON.stringify(msgs.slice(-60))) } catch { /* sin almacenamiento */ } }, [msgs])
-  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: 'smooth' }) }, [msgs, busy, open])
+  useEffect(() => { try { sessionStorage.setItem('samantha.chat.msgs', JSON.stringify(msgs.slice(-40))) } catch { /* sin almacenamiento */ } }, [msgs])
+  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: 'smooth' }) }, [msgs, busy, progress, open])
   useEffect(() => { if (open && !info) shop('/info').then(setInfo).catch(() => {}) }, [open])
   // En el teléfono el chat ocupa toda la pantalla visible: sigue al teclado y bloquea el scroll de la página.
   useEffect(() => {
@@ -666,44 +773,56 @@ function ChatWidget() {
   const wa = info?.whatsapp?.replace(/\D/g, '')
   const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}` : ''
   const grow = () => { const el = input.current; if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' } }
-  const say = async (raw: string) => {
-    const t = raw.trim(); if (!t || busy) return
-    setText(''); requestAnimationFrame(grow)
-    setMsgs((m) => [...m, { from: 'me', text: t, at: Date.now() }]); setBusy(true)
-    try {
-      const r = await shop('/chat', { sessionId: sid.current, message: t })
-      setMsgs((m) => [...m, { from: 'bot', text: r.reply, at: Date.now() }])
-    } catch {
-      setMsgs((m) => [...m, { from: 'bot', text: 'No pude responder ahora. Revisá tu conexión y probá de nuevo' + (wa ? ', o escribinos por WhatsApp.' : '.'), at: Date.now(), error: true }])
-    }
-    setBusy(false)
+  const go = (href: string, external?: boolean) => {
+    if (href === '#cart') { setOpen(false); cartCtx.setOpen(true); return }
+    if (external || /^https?:/.test(href)) { window.open(href, '_blank', 'noopener'); return }
+    setOpen(false); nav(href)
   }
+  // Una consulta al agente: mensaje de texto o acción de un botón. El carrito de la tienda viaja y vuelve validado.
+  const send = async (p: { message?: string; action?: any }, shown?: string) => {
+    if (busy) return
+    if (shown) setMsgs((m) => [...m, { from: 'me', text: shown, at: Date.now() }])
+    setBusy(true); setProgress('')
+    try {
+      const fin = await callAgent(sid.current, { ...p, cart: cartCtx.items.map((i) => ({ id: i.id, qty: i.qty })) }, setProgress)
+      if (Array.isArray(fin.cart)) cartCtx.replace(fin.cart)
+      setMsgs((m) => [...m, { from: 'bot', text: fin.reply, at: Date.now(), blocks: fin.blocks?.length ? fin.blocks : undefined }])
+    } catch (e: any) {
+      setMsgs((m) => [...m, { from: 'bot', text: e?.message && !/^Error \d+|Failed to fetch|NetworkError|sin respuesta/.test(e.message) ? e.message : 'No pude responder ahora. Revisá tu conexión y probá de nuevo' + (wa ? ', o escribinos por WhatsApp.' : '.'), at: Date.now(), error: true }])
+    }
+    setBusy(false); setProgress('')
+  }
+  const say = (raw: string) => { const t = raw.trim(); if (!t) return; setText(''); requestAnimationFrame(grow); send({ message: t }, t) }
+  const act = (action: any) => send({ action })
   const newChat = () => {
     try { const s = crypto.randomUUID(); localStorage.setItem('samantha.chat', s); sid.current = s } catch { sid.current = crypto.randomUUID() }
     setMsgs([{ from: 'bot', text: CHAT_WELCOME, at: Date.now() }]); setText('')
   }
-  const render = (t: string) => t.split('\n').map((line, i) => {
-    const num = line.match(/^(\d+)\.\s/)
-    const parts = line.split(/(https?:\/\/\S+)/).map((p, j) => (/^https?:/.test(p) ? <a key={j} href={p}>{p.includes('/pay/') ? 'Ir a pagar' : p}</a> : p))
-    return <div key={i} className="bline">{parts}{num && <button className="mini" onClick={() => say('agregar ' + num[1])}>Agregar</button>}</div>
-  })
+  const render = (t: string) => t.split('\n').map((line, i) => <div key={i} className="bline">{line.split(/(https?:\/\/\S+)/).map((p, j) => (/^https?:/.test(p) ? <a key={j} href={p} target="_blank" rel="noreferrer">{p}</a> : p))}</div>)
   if (loc.pathname.startsWith('/tienda/checkout')) return null
   const first = msgs.length <= 1
+  const lastWith = (type: string) => { for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].blocks?.some((b) => b.type === type)) return i; return -1 }
+  const live = { cart: lastWith('cart'), checkout: lastWith('checkout') }
+  const count = cartCtx.count
   return (
     <>
-      {!open && <button className="st-chat-fab sf-chat-fab" onClick={() => setOpen(true)} aria-label="Abrir el asistente virtual"><SfIcon n="chat" size={24} /><span>Asistente</span></button>}
+      {!open && <button className="st-chat-fab sf-chat-fab" onClick={() => setOpen(true)} aria-label="Abrir el asistente virtual"><SfIcon n="chat" size={24} /><span>Asistente</span>{count > 0 && <b>{count}</b>}</button>}
       {open && <div className="sf-chat" ref={box} role="dialog" aria-modal="true" aria-label="Asistente virtual">
         <header className="sf-chat-head">
           <button className="sf-chat-ico" onClick={() => setOpen(false)} aria-label="Cerrar el chat"><span className="i-back"><SfIcon n="back" size={22} /></span><span className="i-close"><SfIcon n="close" size={20} /></span></button>
           <LogoMark size={40} />
-          <div className="sf-chat-who"><b>Asistente Samantha</b><small><i className={online ? 'on' : ''} />{online ? <>En línea<span className="hide-s"> · responde al instante</span></> : 'Sin conexión'}</small></div>
+          <div className="sf-chat-who"><b>Asistente Samantha</b><small><i className={online ? 'on' : ''} />{online ? <>En línea<span className="hide-s"> · compras y pedidos</span></> : 'Sin conexión'}</small></div>
+          <button className="sf-chat-ico" onClick={() => go('#cart')} aria-label={`Abrir el carrito, ${count} productos`} title="Carrito"><SfIcon n="bag" size={20} />{count > 0 && <b className="sf-chat-badge">{count}</b>}</button>
           <button className="sf-chat-ico sf-hide-d" onClick={newChat} aria-label="Nueva conversación" title="Nueva conversación"><SfIcon n="refresh" size={19} /></button>
           {waLink && <a className="sf-chat-ico" href={waLink} target="_blank" rel="noreferrer" aria-label="Hablar con una persona por WhatsApp" title="Hablar con una persona"><SfIcon n="chat" size={20} /></a>}
         </header>
         <div className="sf-chat-body" ref={body} role="log" aria-live="polite">
-          {msgs.map((m, i) => <div key={i} className={'sf-msg ' + m.from + (m.error ? ' err' : '')}><div className="bubble">{render(m.text)}</div><time>{hhmm(m.at)}</time></div>)}
+          {msgs.map((m, i) => <div key={i} className={'sf-msg ' + m.from + (m.error ? ' err' : '') + (m.blocks ? ' has-blocks' : '')}>
+            <div className="bubble">{render(m.text)}</div>
+            {m.blocks && <ChatBlocks blocks={m.blocks} msgIndex={i} live={live} busy={busy} act={act} say={say} go={go} />}
+            <time>{hhmm(m.at)}</time></div>)}
           {first && <div className="sf-chat-chips">{CHIPS.map((c) => <button key={c} onClick={() => say(c)}>{c}</button>)}{waLink && <a href={waLink} target="_blank" rel="noreferrer">Hablar con una persona</a>}</div>}
-          {busy && <div className="sf-msg bot"><div className="bubble typing" aria-label="Escribiendo"><i /><i /><i /></div></div>}
+          {busy && <div className="sf-msg bot"><div className="bubble typing" aria-label="Escribiendo"><i /><i /><i />{progress && <span>{progress}</span>}</div></div>}
         </div>
         {!online && <div className="sf-chat-off" role="status">Sin conexión. Cuando vuelva internet podés seguir la conversación.</div>}
         {!first && <div className="sf-chat-quick">{CHIPS.map((c) => <button key={c} onClick={() => say(c)} disabled={busy}>{c}</button>)}{waLink && <a href={waLink} target="_blank" rel="noreferrer">Persona</a>}</div>}
