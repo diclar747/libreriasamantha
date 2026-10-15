@@ -1,5 +1,5 @@
-import { InstallBanner } from '../pwa'
-import { LogoWord } from '../components/Logo'
+import { InstallBanner, useOnline } from '../pwa'
+import { LogoMark, LogoWord } from '../components/Logo'
 import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -110,6 +110,10 @@ const SF: Record<string, string> = {
   chat: 'M4 20l1.3-4A8 8 0 1 1 8.2 18.7L4 20z',
   insta: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17.5 6.5h.01',
   arrow: 'M5 12h14M13 6l6 6-6 6',
+  send: 'M21 3L3 10.5l7.2 2.8L13 21 21 3zM10.2 13.3L21 3',
+  refresh: 'M20 11a8 8 0 1 0-2.4 5.7M20 4v7h-7',
+  back: 'M15 5l-7 7 7 7',
+  close: 'M6 6l12 12M18 6L6 18',
   home: 'M3 11.5L12 4l9 7.5M5.5 10v10h4.5v-6h4v6h4.5V10',
   grid: 'M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z',
   list: 'M5 6h14M5 12h14M5 18h14',
@@ -623,22 +627,60 @@ function PrintRequest() {
   )
 }
 
-const CHIPS = ['Buscar cuadernos', 'Costos de envío', 'Formas de pago', 'Listas escolares', 'Pedir una impresión', 'Ver mi carrito']
+const CHIPS = ['Biblias', 'Devocionales', 'Costos de envío', 'Formas de pago', 'Ver mi carrito']
+const CHAT_WELCOME = '¡Hola! Soy el asistente de Samantha. Te ayudo con Biblias, devocionales, regalos, precios, envíos y tu pedido. ¿Qué necesitás?'
+
+type ChatMsg = { from: 'me' | 'bot'; text: string; at: number; error?: boolean }
+const hhmm = (t: number) => new Date(t).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })
 
 function ChatWidget() {
   const loc = useLocation()
+  const online = useOnline()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [msgs, setMsgs] = useState<{ from: 'me' | 'bot'; text: string }[]>([{ from: 'bot', text: '¡Hola! Soy el asistente de Librería Samantha. Te ayudo con productos, precios, envíos y tu pedido. ¿Qué necesitás?' }])
+  const [info, setInfo] = useState<any>(null)
+  const [msgs, setMsgs] = useState<ChatMsg[]>(() => {
+    try { const j = sessionStorage.getItem('samantha.chat.msgs'); if (j) { const m = JSON.parse(j); if (Array.isArray(m) && m.length) return m } } catch { /* sin almacenamiento */ }
+    return [{ from: 'bot', text: CHAT_WELCOME, at: Date.now() }]
+  })
   const [text, setText] = useState('')
   const sid = useRef((() => { try { let s = localStorage.getItem('samantha.chat'); if (!s) { s = crypto.randomUUID(); localStorage.setItem('samantha.chat', s) } return s } catch { return crypto.randomUUID() } })())
-  const end = useRef<HTMLDivElement>(null)
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [msgs, open, busy])
+  const box = useRef<HTMLDivElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { try { sessionStorage.setItem('samantha.chat.msgs', JSON.stringify(msgs.slice(-60))) } catch { /* sin almacenamiento */ } }, [msgs])
+  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: 'smooth' }) }, [msgs, busy, open])
+  useEffect(() => { if (open && !info) shop('/info').then(setInfo).catch(() => {}) }, [open])
+  // En el teléfono el chat ocupa toda la pantalla visible: sigue al teclado y bloquea el scroll de la página.
+  useEffect(() => {
+    if (!open) return
+    document.documentElement.classList.add('chat-open')
+    const vv = window.visualViewport
+    const fit = () => { if (box.current && vv) { box.current.style.setProperty('--vvh', vv.height + 'px'); box.current.style.setProperty('--vvt', vv.offsetTop + 'px') } body.current?.scrollTo({ top: body.current.scrollHeight }) }
+    fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit)
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', esc)
+    if (!window.matchMedia('(pointer: coarse)').matches) setTimeout(() => input.current?.focus(), 60)
+    return () => { document.documentElement.classList.remove('chat-open'); vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); window.removeEventListener('keydown', esc) }
+  }, [open])
+  const wa = info?.whatsapp?.replace(/\D/g, '')
+  const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}` : ''
+  const grow = () => { const el = input.current; if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' } }
   const say = async (raw: string) => {
     const t = raw.trim(); if (!t || busy) return
-    setText(''); setMsgs((m) => [...m, { from: 'me', text: t }]); setBusy(true)
-    const r = await shop('/chat', { sessionId: sid.current, message: t }).catch(() => ({ reply: 'No pude responder ahora. Probá de nuevo en un momento o escribinos por WhatsApp.' }))
-    setMsgs((m) => [...m, { from: 'bot', text: r.reply }]); setBusy(false)
+    setText(''); requestAnimationFrame(grow)
+    setMsgs((m) => [...m, { from: 'me', text: t, at: Date.now() }]); setBusy(true)
+    try {
+      const r = await shop('/chat', { sessionId: sid.current, message: t })
+      setMsgs((m) => [...m, { from: 'bot', text: r.reply, at: Date.now() }])
+    } catch {
+      setMsgs((m) => [...m, { from: 'bot', text: 'No pude responder ahora. Revisá tu conexión y probá de nuevo' + (wa ? ', o escribinos por WhatsApp.' : '.'), at: Date.now(), error: true }])
+    }
+    setBusy(false)
+  }
+  const newChat = () => {
+    try { const s = crypto.randomUUID(); localStorage.setItem('samantha.chat', s); sid.current = s } catch { sid.current = crypto.randomUUID() }
+    setMsgs([{ from: 'bot', text: CHAT_WELCOME, at: Date.now() }]); setText('')
   }
   const render = (t: string) => t.split('\n').map((line, i) => {
     const num = line.match(/^(\d+)\.\s/)
@@ -646,18 +688,31 @@ function ChatWidget() {
     return <div key={i} className="bline">{parts}{num && <button className="mini" onClick={() => say('agregar ' + num[1])}>Agregar</button>}</div>
   })
   if (loc.pathname.startsWith('/tienda/checkout')) return null
+  const first = msgs.length <= 1
   return (
     <>
-      {!open && <button className="st-chat-fab primary" onClick={() => setOpen(true)} aria-label="Abrir el asistente virtual">💬 Asistente</button>}
-      {open && <div className="st-chat" role="dialog" aria-label="Asistente virtual">
-        <div className="st-chat-head"><div><b>Asistente Samantha</b><small>Responde al instante, todo el día</small></div><button onClick={() => setOpen(false)} aria-label="Cerrar">×</button></div>
-        <div className="st-chat-body">
-          {msgs.map((m, i) => <div key={i} className={'bubble ' + m.from}>{render(m.text)}</div>)}
-          {msgs.length === 1 && <div className="chips">{CHIPS.map((c) => <button key={c} onClick={() => say(c)}>{c}</button>)}</div>}
-          {busy && <div className="bubble bot typing" aria-label="Escribiendo"><i /><i /><i /></div>}
-          <div ref={end} />
+      {!open && <button className="st-chat-fab sf-chat-fab" onClick={() => setOpen(true)} aria-label="Abrir el asistente virtual"><SfIcon n="chat" size={24} /><span>Asistente</span></button>}
+      {open && <div className="sf-chat" ref={box} role="dialog" aria-modal="true" aria-label="Asistente virtual">
+        <header className="sf-chat-head">
+          <button className="sf-chat-ico" onClick={() => setOpen(false)} aria-label="Cerrar el chat"><span className="i-back"><SfIcon n="back" size={22} /></span><span className="i-close"><SfIcon n="close" size={20} /></span></button>
+          <LogoMark size={40} />
+          <div className="sf-chat-who"><b>Asistente Samantha</b><small><i className={online ? 'on' : ''} />{online ? <>En línea<span className="hide-s"> · responde al instante</span></> : 'Sin conexión'}</small></div>
+          <button className="sf-chat-ico sf-hide-d" onClick={newChat} aria-label="Nueva conversación" title="Nueva conversación"><SfIcon n="refresh" size={19} /></button>
+          {waLink && <a className="sf-chat-ico" href={waLink} target="_blank" rel="noreferrer" aria-label="Hablar con una persona por WhatsApp" title="Hablar con una persona"><SfIcon n="chat" size={20} /></a>}
+        </header>
+        <div className="sf-chat-body" ref={body} role="log" aria-live="polite">
+          {msgs.map((m, i) => <div key={i} className={'sf-msg ' + m.from + (m.error ? ' err' : '')}><div className="bubble">{render(m.text)}</div><time>{hhmm(m.at)}</time></div>)}
+          {first && <div className="sf-chat-chips">{CHIPS.map((c) => <button key={c} onClick={() => say(c)}>{c}</button>)}{waLink && <a href={waLink} target="_blank" rel="noreferrer">Hablar con una persona</a>}</div>}
+          {busy && <div className="sf-msg bot"><div className="bubble typing" aria-label="Escribiendo"><i /><i /><i /></div></div>}
         </div>
-        <form className="st-chat-in" onSubmit={(e) => { e.preventDefault(); say(text) }}><input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí tu consulta…" aria-label="Mensaje" /><button className="primary" disabled={busy || !text.trim()}>Enviar</button></form>
+        {!online && <div className="sf-chat-off" role="status">Sin conexión. Cuando vuelva internet podés seguir la conversación.</div>}
+        {!first && <div className="sf-chat-quick">{CHIPS.map((c) => <button key={c} onClick={() => say(c)} disabled={busy}>{c}</button>)}{waLink && <a href={waLink} target="_blank" rel="noreferrer">Persona</a>}</div>}
+        <form className="sf-chat-in" onSubmit={(e) => { e.preventDefault(); say(text) }}>
+          <textarea ref={input} rows={1} value={text} enterKeyHint="send" autoComplete="off" placeholder="Escribí tu consulta…" aria-label="Mensaje"
+            onChange={(e) => { setText(e.target.value); grow() }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !window.matchMedia('(pointer: coarse)').matches) { e.preventDefault(); say(text) } }} />
+          <button className="sf-send" disabled={busy || !online || !text.trim()} aria-label="Enviar"><SfIcon n="send" size={21} /></button>
+        </form>
       </div>}
     </>
   )

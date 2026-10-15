@@ -29,7 +29,7 @@ function cartText(cart: Item[]) {
   return cart.map((i, n) => `${n + 1}. ${i.qty} x ${i.name} — ${gs(i.price * i.qty)}`).join('\n') + `\nTotal productos: ${gs(total)}`
 }
 
-const MENU = 'Puedo ayudarte con:\n• Buscar productos (escribí el nombre, ej. "cuaderno")\n• "lista <colegio>" para listas escolares\n• "carrito", "quitar N", "confirmar"\n• "estado P-000123" para ver un pedido\n• "imprimir 20 copias de ..." para pedir un presupuesto\n• horarios y ubicación'
+const MENU = 'Puedo ayudarte con:\n• Buscar productos (escribí el nombre, ej. "Biblia" o "devocional")\n• "lista <colegio>" para listas escolares\n• "carrito", "quitar N", "confirmar"\n• "estado P-000123" para ver un pedido\n• "imprimir 20 copias de ..." para pedir un presupuesto\n• horarios y ubicación'
 
 // Búsqueda tolerante: sin tildes, plurales ("cuadernos" → "cuaderno") y varias palabras (todas deben aparecer).
 const FOLD = "translate(lower(%s), 'áéíóúüñ', 'aeiouun')"
@@ -123,7 +123,7 @@ async function handle(db: Db, channel: string, externalId: string, st: State, ra
     }
   }
 
-  if (/^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|menu|ayuda)/.test(t) && t.length <= 24) return '¡Hola! Soy el asistente de Librería Samantha. ' + MENU
+  if (/^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|menu|ayuda)/.test(t) && t.length <= 24) return '¡Hola! Soy el asistente de Samantha — Libros y regalos. ' + MENU
 
   if (/horario|abren|cierran|hora de atencion/.test(t)) { const s = await getSetting(db, 'shop'); return `Atendemos: ${s.hours}.` }
   if (/direccion|ubicacion|donde (estan|queda)|como llegar/.test(t)) { const s = await getSetting(db, 'shop'); return s.address ? `Estamos en: ${s.address}.` : 'Escribinos por acá y te pasamos la ubicación.' }
