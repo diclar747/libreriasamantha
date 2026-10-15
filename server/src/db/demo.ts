@@ -7,7 +7,7 @@ import { createPool, migrate } from './client.js'
 const db = createPool(process.env.DATABASE_URL!)
 await migrate(db)
 
-const PALETTES: [string, string][] = [['#1f3a8a', '#4f46e5'], ['#9f1239', '#e11d48'], ['#065f46', '#10b981'], ['#7c2d12', '#ea580c'], ['#4c1d95', '#8b5cf6'], ['#0f766e', '#14b8a6'], ['#1e293b', '#475569'], ['#92400e', '#f59e0b']]
+const PALETTES: [string, string][] = [['#1f2a7a', '#3f48cf'], ['#14507a', '#2a86c4'], ['#0f5c5c', '#1f9a94'], ['#3a2a86', '#6a48c8'], ['#26325f', '#4a5a96'], ['#1a5a44', '#2a9a70'], ['#3a3f55', '#5f6a88'], ['#4a3a86', '#7a64c4']]
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const wrap = (text: string, max: number) => {
   const out: string[] = []; let line = ''

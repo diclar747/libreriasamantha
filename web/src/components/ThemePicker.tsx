@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 type Theme = 'light' | 'warm' | 'dark'
-type Accent = 'indigo' | 'coral' | 'teal' | 'violet'
+type Accent = 'indigo' | 'sky' | 'teal' | 'forest' | 'gold' | 'coral' | 'rose' | 'violet'
 
 const themes: { id: Theme; label: string }[] = [
   { id: 'light', label: 'Claro' },
@@ -9,9 +9,13 @@ const themes: { id: Theme; label: string }[] = [
   { id: 'dark', label: 'Oscuro' },
 ]
 const accents: { id: Accent; label: string }[] = [
-  { id: 'indigo', label: 'Azul' },
+  { id: 'indigo', label: 'Índigo' },
+  { id: 'sky', label: 'Cielo' },
+  { id: 'teal', label: 'Océano' },
+  { id: 'forest', label: 'Bosque' },
+  { id: 'gold', label: 'Dorado' },
   { id: 'coral', label: 'Coral' },
-  { id: 'teal', label: 'Verde' },
+  { id: 'rose', label: 'Rosa' },
   { id: 'violet', label: 'Violeta' },
 ]
 
@@ -60,8 +64,8 @@ export default function ThemePicker() {
       <div className="theme-panel-head"><strong>Tu estilo</strong><span>Elegí cómo se ve Samantha</span></div>
       <div className="theme-panel-label">Apariencia</div>
       <div className="theme-options">{themes.map((t) => <button key={t.id} type="button" className={'theme-option ' + t.id + (theme === t.id ? ' selected' : '')} onClick={() => setTheme(t.id)} aria-pressed={theme === t.id}><span className="theme-preview"><i /><i /></span>{t.label}</button>)}</div>
-      <div className="theme-panel-label">Color principal</div>
-      <div className="accent-options">{accents.map((a) => <button key={a.id} type="button" className={'accent-option ' + a.id + (accent === a.id ? ' selected' : '')} onClick={() => setAccent(a.id)} aria-pressed={accent === a.id} aria-label={a.label} title={a.label}><span /></button>)}</div>
+      <div className="theme-panel-label">Estilo de color</div>
+      <div className="accent-options">{accents.map((a) => <button key={a.id} type="button" className={'accent-option ' + a.id + (accent === a.id ? ' selected' : '')} onClick={() => setAccent(a.id)} aria-pressed={accent === a.id} aria-label={a.label} title={a.label}><span /><small>{a.label}</small></button>)}</div>
     </div>}
   </div>
 }
