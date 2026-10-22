@@ -1,0 +1,33 @@
+import { call, login, ok, summary } from './t-lib.mjs'
+const tk = await login('admin', 'admin1234')
+const j = async (m, p, body) => { const r = await call(m, p, { token: tk, body }); return r }
+const accounts = (await j('GET', '/money-accounts')).json; const cash = accounts.find((a) => a.kind === 'cash'), bank = accounts.find((a) => a.kind === 'bank' && a.active)
+const bal = async (id) => Number((await j('GET', '/money-accounts')).json.find((a) => a.id === id).balance)
+console.log('== Gastos: registrar, pagar parcial, pagar el resto, anular')
+const cats = (await j('GET', '/expense-categories')).json; const luz = cats.find((c) => c.name === 'Luz')
+let b0 = await bal(bank.id)
+let r = await j('POST', '/expenses', { categoryId: luz.id, concept: 'Factura de luz octubre', beneficiary: 'ANDE', amount: 1250000, documentNumber: '001-001-123' }); ok('gasto de luz 1.250.000 registrado', r.status === 201 && r.json.status === 'pending', r.text.slice(0, 150))
+const ex = r.json
+r = await j('POST', `/expenses/${ex.id}/pay`, { amount: 500000, method: 'transfer', accountId: bank.id }); ok('pago parcial 500.000', r.status === 200, r.text.slice(0, 150))
+let e2 = (await j('GET', '/expenses/' + ex.id)).json; ok('queda parcial, pagado 500.000', e2.status === 'partial' && Number(e2.paid_amount) === 500000, JSON.stringify(e2).slice(0, 160))
+ok('el banco bajó 500.000', (await bal(bank.id)) === b0 - 500000, `${b0} → ${await bal(bank.id)}`)
+r = await j('POST', `/expenses/${ex.id}/pay`, { method: 'transfer', accountId: bank.id }); e2 = (await j('GET', '/expenses/' + ex.id)).json; ok('pago del saldo → pagado', e2.status === 'paid', e2.status)
+r = await j('POST', `/expenses/${ex.id}/pay`, { amount: 1, method: 'transfer', accountId: bank.id }); ok('no se puede pagar de más', r.status >= 400, r.status)
+r = await j('POST', `/expenses/${ex.id}/void`, { reason: 'Prueba de anulación' }); ok('anular gasto pagado (devuelve el dinero)', r.status === 200, r.text.slice(0, 120)); ok('el banco vuelve al saldo inicial', (await bal(bank.id)) === b0, `${await bal(bank.id)} vs ${b0}`)
+console.log('== Proveedor: pagar la factura de compra')
+const pay = (await j('GET', '/payables')).json.items?.[0]
+if (pay) { r = await j('POST', `/suppliers/${pay.supplier_id}/payments`, { amount: pay.pending, method: 'transfer', accountId: bank.id, allocations: [{ payableId: pay.id, amount: pay.pending }] }); ok('pago a proveedor', r.status === 201, r.text.slice(0, 200)) } else console.log('(no hay cuentas por pagar en esta copia)')
+console.log('== Cliente: cobrar deuda de crédito')
+const cus = (await j('GET', '/customers')).json.find((c) => Number(c.balance) > 0)
+if (cus) { const bb = Number(cus.balance); r = await j('POST', `/customers/${cus.id}/payments`, { amount: Math.min(bb, 100000), method: 'cash' }); ok('cobro de deuda en efectivo', r.status === 201, r.text.slice(0, 160)); const after = (await j('GET', '/customers')).json.find((c) => c.id === cus.id); ok('saldo del cliente bajó', Number(after.balance) === bb - Math.min(bb, 100000), `${bb} → ${after.balance}`) }
+console.log('== Dinero: transferencia entre cuentas y movimientos')
+const c0 = await bal(cash.id), k0 = await bal(bank.id)
+r = await j('POST', '/money-movements', { kind: 'transfer', accountId: cash.id, toAccountId: bank.id, amount: 20000, concept: 'Depósito prueba' }); ok('transferencia caja → banco 20.000', r.status === 201, r.text.slice(0, 200))
+ok('saldos consistentes', (await bal(cash.id)) === c0 - 20000 && (await bal(bank.id)) === k0 + 20000)
+r = await j('POST', '/money-movements', { kind: 'transfer', accountId: cash.id, toAccountId: bank.id, amount: 99999999999, concept: 'Sobregiro' }); ok('no deja transferir más de lo que hay', r.status >= 400, r.status + ' ' + r.text.slice(0, 80))
+console.log('== Contabilidad: asiento manual balanceado y desbalanceado')
+const accs = (await j('GET', '/accounting/accounts')).json; const a1 = accs.find((a) => a.type === 'asset'), a2 = accs.find((a) => a.type === 'income' || a.type === 'equity')
+r = await j('POST', '/accounting/entries', { description: 'Asiento prueba', lines: [{ code: a1.code, debit: 50000 }, { code: a2.code, credit: 50000 }] }); ok('asiento balanceado', r.status === 201, r.status + ' ' + r.text.slice(0, 160))
+r = await j('POST', '/accounting/entries', { description: 'Desbalanceado', lines: [{ code: a1.code, debit: 50000 }, { code: a2.code, credit: 40000 }] }); ok('asiento desbalanceado rechazado', r.status >= 400, r.status)
+const tb = (await j('GET', '/accounting/trial-balance')).json; ok('balance de comprobación cuadra (debe = haber)', tb.totalDebit === tb.totalCredit, `${tb.totalDebit} vs ${tb.totalCredit}`)
+process.exit(summary() ? 1 : 0)
