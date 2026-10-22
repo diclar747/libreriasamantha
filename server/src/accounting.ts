@@ -105,6 +105,9 @@ export async function postReturn(tx: Tx, o: {
   await post(tx, { description: `Devolución ${o.number}`, refType: 'sale_return', refId: o.returnId, userId: o.userId, lines })
 }
 
+// Una fecha vacía (filtro sin completar) significa "sin límite", no un error.
+const dates = (q: Record<string, string | undefined>) => ({ from: q.from || undefined, to: q.to || undefined })
+
 async function balances(db: Db, from?: string, to?: string) {
   const { rows } = await db.query(
     `SELECT a.code, a.name, a.type, COALESCE(SUM(l.debit),0) AS debit, COALESCE(SUM(l.credit),0) AS credit
@@ -134,7 +137,7 @@ export function accountingRoutes(app: FastifyInstance, db: Db) {
 
   app.get('/accounting/journal', async (req) => {
     requirePerm(req, 'accounting.view')
-    const { from, to } = req.query as Record<string, string | undefined>
+    const { from, to } = dates(req.query as Record<string, string | undefined>)
     const { rows } = await db.query(
       `SELECT e.id, e.date, e.description, e.ref_type, e.ref_id, e.reversal_of,
          json_agg(json_build_object('code', a.code, 'name', a.name, 'debit', l.debit, 'credit', l.credit) ORDER BY l.id) AS lines
@@ -147,7 +150,7 @@ export function accountingRoutes(app: FastifyInstance, db: Db) {
   app.get('/accounting/ledger/:code', async (req) => {
     requirePerm(req, 'accounting.view')
     const code = (req.params as any).code
-    const { from, to } = req.query as Record<string, string | undefined>
+    const { from, to } = dates(req.query as Record<string, string | undefined>)
     const { rows: acc } = await db.query('SELECT * FROM accounts WHERE code = $1', [code])
     if (!acc[0]) throw new HttpError(404, 'Cuenta inexistente')
     const { rows } = await db.query(
@@ -161,14 +164,14 @@ export function accountingRoutes(app: FastifyInstance, db: Db) {
 
   app.get('/accounting/trial-balance', async (req) => {
     requirePerm(req, 'accounting.view')
-    const { from, to } = req.query as Record<string, string | undefined>
+    const { from, to } = dates(req.query as Record<string, string | undefined>)
     const rows = (await balances(db, from, to)).filter((r) => r.debit || r.credit)
     return { rows, totalDebit: rows.reduce((s, r) => s + r.debit, 0), totalCredit: rows.reduce((s, r) => s + r.credit, 0) }
   })
 
   app.get('/accounting/income-statement', async (req) => {
     requirePerm(req, 'accounting.view')
-    const { from, to } = req.query as Record<string, string | undefined>
+    const { from, to } = dates(req.query as Record<string, string | undefined>)
     const all = await balances(db, from, to)
     const income = all.filter((r) => r.type === 'income' && r.balance), expenses = all.filter((r) => r.type === 'expense' && r.balance)
     const totalIncome = income.reduce((s, r) => s + r.balance, 0), totalExpenses = expenses.reduce((s, r) => s + r.balance, 0)

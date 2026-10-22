@@ -6,7 +6,8 @@ export const fmtDate = (v?: string | null) => (v ? new Date(String(v).length <= 
 export const fmtDateTime = (v?: string | null) => (v ? new Date(v).toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 export const today = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
 export const plusDays = (n: number) => new Date(Date.now() - 3 * 3600_000 + n * 86400_000).toISOString().slice(0, 10)
-export const num = (v: unknown) => Number(String(v ?? '').replace(/[^\d.-]/g, '')) || 0
+// Guaraníes: solo enteros. Se descartan puntos, comas y espacios (el separador de miles se pone al mostrar).
+export const num = (v: unknown) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0
 export const qs = (o: Record<string, unknown>) => Object.entries(o).filter(([, v]) => v !== '' && v !== undefined && v !== null && v !== false).map(([k, v]) => `${k}=${encodeURIComponent(String(v === true ? 1 : v))}`).join('&')
 
 // ---------------------------------------------------------------- Datos
@@ -42,8 +43,27 @@ export async function openAuthed(path: string, opts: { download?: string } = {})
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-export function fileToBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('No se pudo leer el archivo')); r.readAsDataURL(file) })
+// Lee un archivo como data URL. Las fotos (del celular suelen pesar 4 a 12 MB) se reducen antes de subirlas:
+// lado mayor 1600 px, JPEG: queda bien para la tienda y pesa unos cientos de KB. Los PDF pasan tal cual.
+export function fileToBase64(file: File, maxSide = 1600): Promise<string> {
+  const raw = () => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('No se pudo leer el archivo')); r.readAsDataURL(file) })
+  if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') return raw()
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight))
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k))
+        const g = c.getContext('2d'); if (!g) throw new Error('canvas')
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height)
+        URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.85))
+      } catch { URL.revokeObjectURL(url); raw().then(res, rej) }
+    }
+    // formato que el navegador no sabe dibujar (p. ej. HEIC): se envía el original y el servidor lo intenta convertir
+    img.onerror = () => { URL.revokeObjectURL(url); raw().then(res, rej) }
+    img.src = url
+  })
 }
 
 // ---------------------------------------------------------------- Estados
@@ -108,6 +128,17 @@ export function Field({ label, children, hint, error, span }: { label: string; c
 export function Money({ value, onChange, ...rest }: { value: number | string | null | undefined; onChange: (n: number) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const n = Number(value ?? 0)
   return <input inputMode="numeric" {...rest} value={n ? n.toLocaleString('es-PY') : ''} placeholder={rest.placeholder ?? '0'} onChange={(e) => onChange(num(e.target.value))} />
+}
+
+
+/** Número entero/decimal editable: mientras se escribe se muestra lo tecleado (se puede borrar y volver a escribir sin que el campo
+ *  "salte" a 1 o 0); al salir del campo vuelve el valor ya validado. Sustituye a <input type="number"> en los formularios. */
+export function NumInput({ value, onChange, onFocus, onBlur, ...rest }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & { value: number | string | null | undefined }) {
+  const [txt, setTxt] = useState<string | null>(null)
+  return <input inputMode="decimal" {...rest} type="number" value={txt ?? String(value ?? '')}
+    onFocus={(e) => { e.target.select(); onFocus?.(e) }}
+    onChange={(e) => { setTxt(e.target.value); onChange?.(e) }}
+    onBlur={(e) => { setTxt(null); onBlur?.(e) }} />
 }
 
 export function EmptyRow({ cols, text = 'Sin resultados' }: { cols: number; text?: string }) {

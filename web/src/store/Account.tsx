@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { gs, useApp } from '../api'
+import { fileToBase64, NumInput } from '../ui'
 import './account.css'
 
 // ---------------------------------------------------------------- API del cliente (sesión propia, separada de la del personal)
@@ -340,7 +341,7 @@ function OrderDetail() {
   useEffect(() => { if (o?.payment.method === 'transfer') fetch('/api/shop/payment-options').then((r) => r.json()).then(setOpts) }, [o?.payment.method])
   if (!o) return <p className="muted">{d.err || 'Cargando…'}</p>
   const act = async (fn: () => Promise<any>, ok: string) => { try { await fn(); toast(ok); setPanel(null); setText(''); d.reload() } catch (e: any) { toast(e.message, true) } }
-  const toB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f) })
+  const toB64 = (f: File) => fileToBase64(f)
   const pay = async () => { try { const r = await fetch(`/api/shop/orders/${o.number}/retry-payment`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: o.token }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error); location.href = j.url } catch (e: any) { toast(e.message, true) } }
   const sendProof = () => act(async () => {
     const res = await fetch(`/api/shop/orders/${o.number}/proof`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: o.token, accountId: proof.accountId ? Number(proof.accountId) : null, amount: proof.amount ? Number(proof.amount.replace(/\D/g, '')) : null, reference: proof.ref || null, filename: proof.file!.name, mime: proof.file!.type, dataBase64: await toB64(proof.file!) }) })
@@ -383,7 +384,7 @@ function OrderDetail() {
       {panel === 'cancel' && <div className="card acc-stack-s"><h2>Solicitar cancelación</h2><F label="Contanos el motivo"><textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} /></F><div className="row"><button className="danger" disabled={text.length < 3} onClick={() => act(() => cust(`/orders/${o.number}/cancel-request`, { body: { reason: text } }), 'Enviamos tu solicitud')}>Enviar solicitud</button><button onClick={() => setPanel(null)}>Volver</button></div></div>}
       {panel === 'message' && <div className="card acc-stack-s"><h2>Consultar sobre el pedido {o.number}</h2><F label="Tu mensaje"><textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} /></F><div className="row"><button className="primary" disabled={text.length < 2} onClick={() => act(() => cust(`/orders/${o.number}/message`, { body: { text } }), 'Mensaje enviado')}>Enviar</button><button onClick={() => setPanel(null)}>Volver</button></div></div>}
       {panel === 'return' && <div className="card acc-stack-s"><h2>Solicitar devolución</h2>
-        {o.items.map((i: any) => <div key={i.id} className="acc-row"><span>{i.name} <small className="muted">(comprados {i.qty})</small></span><input type="number" min={0} max={i.qty} style={{ width: 80 }} value={ret[i.id] ?? 0} onChange={(e) => setRet({ ...ret, [i.id]: Math.min(i.qty, Math.max(0, Number(e.target.value))) })} /></div>)}
+        {o.items.map((i: any) => <div key={i.id} className="acc-row"><span>{i.name} <small className="muted">(comprados {i.qty})</small></span><NumInput min={0} max={i.qty} style={{ width: 80 }} value={ret[i.id] ?? 0} onChange={(e) => setRet({ ...ret, [i.id]: Math.min(i.qty, Math.max(0, Number(e.target.value))) })} /></div>)}
         <F label="Motivo"><textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} /></F><F label="Fotos del producto (opcional, hasta 4)"><input type="file" accept="image/*" multiple onChange={(e) => setPhotos([...(e.target.files ?? [])].slice(0, 4))} /></F>
         <div className="row"><button className="primary" disabled={text.length < 3 || !Object.values(ret).some((n) => n > 0)} onClick={() => act(async () => cust(`/orders/${o.number}/return-request`, { body: { reason: text, items: Object.entries(ret).filter(([, n]) => n > 0).map(([id, qty]) => ({ orderItemId: Number(id), qty })), photos: await Promise.all(photos.map(async (p) => ({ filename: p.name, mime: p.type, dataBase64: await toB64(p) }))) } }), 'Solicitud de devolución enviada')}>Enviar solicitud</button><button onClick={() => setPanel(null)}>Volver</button></div>
         <small className="muted">La devolución del dinero se registra cuando recibimos y verificamos el producto.</small></div>}

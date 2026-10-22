@@ -4,6 +4,7 @@ import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { gs, useApp } from '../api'
+import { fileToBase64, NumInput } from '../ui'
 import { Icon } from '../components/Icons'
 import ThemePicker from '../components/ThemePicker'
 import './store.css'
@@ -357,7 +358,7 @@ function ProductPage() {
           {p.short_description && <p><b>{p.short_description}</b></p>}<p>{p.description}</p>{(p.edition || p.language || p.subcategory) && <p className="muted">{[p.subcategory, p.edition && 'Edición ' + p.edition, p.language].filter(Boolean).join(' · ')}</p>}
           {out ? <span className="pill bad">Agotado</span> : <>
             <span className={'pill ' + (p.availability === 'low' ? 'warn' : 'ok')}>{p.availability === 'low' ? 'Quedan pocas unidades' : 'Disponible'}</span>
-            <div className="row"><input type="number" min={1} max={99} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value)))} style={{ width: 90 }} /><button className="primary" onClick={() => add(p, qty)}>Agregar al carrito</button></div></>}
+            <div className="row"><NumInput min={1} max={99} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value)))} style={{ width: 90 }} /><button className="primary" onClick={() => add(p, qty)}>Agregar al carrito</button></div></>}
         </div>
       </div>
       {p.related?.length > 0 && <><h2 style={{ marginTop: 28 }}>También te puede interesar</h2><div className="st-grid">{p.related.map((r: any) => <ProductCard key={r.id} p={r} />)}</div></>}
@@ -374,7 +375,7 @@ function CartPage() {
       {!items.length ? <p className="muted">Está vacío. <Link to="/tienda">Ver productos</Link></p> : (
         <div className="card st-cart-page">
           {items.map((i) => (
-            <div key={i.id} className="st-line st-cart-item"><span>{i.name}</span><input type="number" min={0} max={i.max} value={i.qty} onChange={(e) => setQty(i.id, Number(e.target.value))} style={{ width: 80 }} aria-label={`Cantidad de ${i.name}`} /><b>{gs(i.price * i.qty)}</b><button onClick={() => setQty(i.id, 0)} aria-label={`Quitar ${i.name}`}>×</button></div>
+            <div key={i.id} className="st-line st-cart-item"><span>{i.name}</span><NumInput min={0} max={i.max} value={i.qty} onChange={(e) => setQty(i.id, Number(e.target.value))} style={{ width: 80 }} aria-label={`Cantidad de ${i.name}`} /><b>{gs(i.price * i.qty)}</b><button onClick={() => setQty(i.id, 0)} aria-label={`Quitar ${i.name}`}>×</button></div>
           ))}
           <div className="st-line"><b>Total productos</b><span /><b>{gs(total)}</b><span /></div>
           <Link to="/tienda/checkout"><button className="primary" style={{ marginTop: 12 }}>Continuar con la compra</button></Link>
@@ -553,7 +554,7 @@ function OrderStatus() {
     if (!proof.file) return
     setSending(true); setSent(''); setErr('')
     try {
-      const dataBase64: string = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(proof.file!) })
+      const dataBase64: string = await fileToBase64(proof.file!)
       const r = await shop(`/orders/${o.number}/proof`, { token: tok, accountId: proof.accountId ? Number(proof.accountId) : null, amount: proof.amount ? Number(proof.amount.replace(/\D/g, '')) : null, reference: proof.ref || null, filename: proof.file.name, mime: proof.file.type, dataBase64 })
       setSent(r.message); setProof({ ...proof, file: null }); lookup()
     } catch (e: any) { setErr(e.message) } finally { setSending(false) }
@@ -631,8 +632,8 @@ function PrintRequest() {
         <label>Nombre<input value={f.customerName} onChange={set('customerName')} /></label>
         <label>Teléfono / WhatsApp<input value={f.phone} onChange={set('phone')} /></label>
         <label>¿Qué necesitás imprimir?<input value={f.description} onChange={set('description')} /></label>
-        <label>Copias<input type="number" min={1} value={f.copies} onChange={set('copies', true)} /></label>
-        <label>Páginas por copia<input type="number" min={1} value={f.pages} onChange={set('pages', true)} /></label>
+        <label>Copias<NumInput min={1} value={f.copies} onChange={set('copies', true)} /></label>
+        <label>Páginas por copia<NumInput min={1} value={f.pages} onChange={set('pages', true)} /></label>
         <label>Terminación<select value={f.finishing} onChange={set('finishing')}><option value="">Ninguna</option><option value="anillado">Anillado</option><option value="plastificado">Plastificado</option></select></label>
       </div>
       <label className="row" style={{ flexDirection: 'row' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.color} onChange={(e) => setF({ ...f, color: e.target.checked })} /> A color</label>

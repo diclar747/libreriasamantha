@@ -29,9 +29,12 @@ import { scanPublicRoutes, scanRoutes } from './scanning.js'
 import { orderAdminRoutes2, orderRefundRoutes } from './orderadmin.js'
 import { portalAdminRoutes, portalRoutes } from './portal.js'
 
+// Las fotos del celular llegan en base64 dentro del JSON: el límite por defecto de Fastify (1 MB) las rechazaba.
+const BODY_LIMIT = 16 * 1024 * 1024
+
 export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } } = {}) {
   const logger = process.env.NODE_ENV !== 'test'
-  const app = (opts.https ? Fastify({ logger, https: opts.https }) : Fastify({ logger })) as unknown as FastifyInstance
+  const app = (opts.https ? Fastify({ logger, https: opts.https, bodyLimit: BODY_LIMIT }) : Fastify({ logger, bodyLimit: BODY_LIMIT })) as unknown as FastifyInstance
   app.register(cors, { origin: true })
   // Cabeceras de seguridad. La cámara se permite solo a la propia app (escáner de códigos).
   app.addHook('onSend', async (req, reply) => {
@@ -43,9 +46,17 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
     if (req.url.startsWith('/api/') && !reply.hasHeader('cache-control')) reply.header('Cache-Control', 'no-store')
   })
 
+  // Un filtro vacío (?from=&to=) significa "sin filtro": se descarta antes de que llegue a las consultas.
+  app.addHook('preValidation', async (req) => {
+    const q = req.query as Record<string, unknown> | undefined
+    if (q && typeof q === 'object') for (const k of Object.keys(q)) if (q[k] === '') delete q[k]
+  })
+
   app.setErrorHandler((err: any, _req, reply) => {
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message })
     if (err instanceof ZodError) return reply.code(400).send({ error: 'Datos inválidos', issues: err.issues })
+    // Texto/fecha/número con formato inválido que llega desde un filtro o un enlace: es un error del pedido, no del servidor.
+    if (['22P02', '22007', '22008', '22003', '22001'].includes(err.code)) return reply.code(400).send({ error: 'Datos inválidos' })
     if (err.code === '23514' || err.code === '23503') return reply.code(400).send({ error: 'Datos inválidos: ' + err.detail })
     app.log.error(err)
     if (process.env.DEBUG_ERRORS) console.error(err)

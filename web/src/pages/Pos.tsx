@@ -4,7 +4,7 @@ import { api, gs, useApp } from '../api'
 import { Icon, type IconName } from '../components/Icons'
 import QRCode from 'qrcode'
 import { Scanner, useKeyboardScanner } from '../components/Scanner'
-import { Field, Modal, Money } from '../ui'
+import { Field, Modal, Money, NumInput } from '../ui'
 
 interface Line { id: number; name: string; price: number; qty: number; discount: number; available: number | null; service: boolean; image_url?: string | null; list?: number; promo?: string | null; reason?: string }
 const METHODS: { key: string; label: string; icon: IconName; detail: string }[] = [
@@ -107,7 +107,12 @@ export default function Pos() {
   }
   function setPaymentAmount(method: string, raw: string) {
     const amount = raw === '' ? '' : String(Math.max(0, Math.trunc(Number(raw) || 0)))
-    setPays((current) => ({ ...current, [method]: amount }))
+    // Con dos medios, el otro se completa solo con lo que falta (efectivo + tarjeta, por ejemplo).
+    setPays((current) => {
+      const keys = Object.keys(current)
+      if (keys.length === 2 && amount !== '') { const other = keys.find((k) => k !== method)!; return { ...current, [method]: amount, [other]: String(Math.max(0, due - Number(amount))) } }
+      return { ...current, [method]: amount }
+    })
   }
   function onEnter() {
     // Lector de códigos de barras: coincidencia exacta agrega directo
@@ -246,7 +251,7 @@ export default function Pos() {
             <label className="pos-customer">Cliente<select value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Consumidor final</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <div className="pos-pay-label">Pago al contado</div>
             <div className="pos-methods">{METHODS.map(({ key, label, icon, detail }) => <button key={key} type="button" className={'pos-method' + (key in pays ? ' selected' : '')} aria-pressed={key in pays} onClick={() => togglePayment(key)} disabled={!cart.length}><Icon name={icon} size={21} /><span><b>{label}</b><small>{detail}</small></span></button>)}</div>
-            {METHODS.filter(({ key }) => key in pays).map(({ key, label, icon }) => <label className="pos-pay-input" key={key}><span><Icon name={icon} size={17} /> {label}</span><div><small>Gs.</small><input type="number" min={0} step={1} inputMode="numeric" aria-label={`Monto en ${label.toLowerCase()}`} value={pays[key]} onChange={(e) => setPaymentAmount(key, e.target.value)} /></div></label>)}
+            {METHODS.filter(({ key }) => key in pays).map(({ key, label, icon }) => <label className="pos-pay-input" key={key}><span><Icon name={icon} size={17} /> {label}</span><div><small>Gs.</small><NumInput min={0} step={1} inputMode="numeric" aria-label={`Monto en ${label.toLowerCase()}`} value={pays[key]} onChange={(e) => setPaymentAmount(key, e.target.value)} /></div></label>)}
             <button type="button" className={'pos-credit' + (onCredit ? ' selected' : '')} aria-pressed={onCredit} onClick={() => setOnCredit((current) => !current)} disabled={!cart.length}><Icon name="credit" size={22} /><span><b>Venta a crédito</b><small>Dejar el saldo pendiente al cliente</small></span><span className="pos-credit-check">{onCredit ? '✓' : ''}</span></button>
             {onCredit && <div className="pos-credit-info">{creditAmount > 0 ? <><span>Saldo a crédito</span><b>{gs(creditAmount)}</b></> : <span>El pago seleccionado cubre el total.</span>}{selectedCustomer && <small>Cupo disponible: {gs(availableCredit)}</small>}</div>}
             {needsCustomer && <p className="pos-payment-warning">Elegí un cliente para registrar el saldo a crédito.</p>}
@@ -271,7 +276,7 @@ export default function Pos() {
         if (disc.id === 0) { setGlobalDisc(amount); setSaleReason(disc.reason) } else setCart((c) => c.map((l) => (l.id === disc.id ? { ...l, discount: amount, reason: disc.reason } : l)))
         setDisc(null) }}>Aplicar</button></>}>
         <div className="form"><Field label="Tipo"><select value={disc.kind} onChange={(e) => setDisc({ ...disc, kind: e.target.value, value: 0 })}><option value="pct">Porcentaje</option><option value="amt">Monto en Gs.</option></select></Field>
-          <Field label={disc.kind === 'pct' ? 'Porcentaje' : 'Monto'}>{disc.kind === 'pct' ? <input type="number" min={0} max={100} value={disc.value} onChange={(e) => setDisc({ ...disc, value: Number(e.target.value) })} /> : <Money value={disc.value} onChange={(n) => setDisc({ ...disc, value: n })} />}</Field>
+          <Field label={disc.kind === 'pct' ? 'Porcentaje' : 'Monto'}>{disc.kind === 'pct' ? <NumInput min={0} max={100} value={disc.value} onChange={(e) => setDisc({ ...disc, value: Number(e.target.value) })} /> : <Money value={disc.value} onChange={(n) => setDisc({ ...disc, value: n })} />}</Field>
           <Field label="Motivo" span={2}><input value={disc.reason} onChange={(e) => setDisc({ ...disc, reason: e.target.value })} placeholder="Cliente frecuente, envase dañado…" /></Field></div>
         <p className="muted">Descuento: <b>{gs(disc.kind === 'pct' ? Math.round(disc.base * Math.min(disc.value, 100) / 100) : Math.min(disc.value, disc.base))}</b> sobre {gs(disc.base)}. Hasta el 10% lo aplica el cajero; más requiere la clave de un responsable.</p></Modal>}
       {auth && <Modal title="Requiere autorización" onClose={() => setAuth(null)} footer={<><button onClick={() => setAuth(null)}>Cancelar</button><button className="primary" disabled={!auth.username || !auth.password} onClick={async () => {

@@ -159,9 +159,9 @@ function isPrivateHost(host: string) {
 
 async function loadImageInput(b: { data?: string; url?: string }) {
   if (b.data) {
-    const m = /^data:image\/(png|jpe?g|webp|gif);base64,(.+)$/s.exec(b.data)
+    const m = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/s.exec(b.data)
     if (!m) throw new HttpError(400, 'Formato de imagen no permitido (usá JPG, PNG o WebP)')
-    return { buf: Buffer.from(m[2], 'base64'), source: null as string | null }
+    return { buf: Buffer.from(m[1], 'base64'), source: null as string | null }
   }
   if (b.url) {
     const u = new URL(b.url)
@@ -410,13 +410,13 @@ export function catalogRoutes(app: FastifyInstance, db: Db) {
   app.post('/products/:id/images', async (req, reply) => {
     requirePerm(req, 'products.write')
     const id = Number((req.params as any).id)
-    const b = z.object({ data: z.string().max(9_000_000).optional(), url: z.string().url().optional() }).parse(req.body)
+    const b = z.object({ data: z.string().max(15_000_000).optional(), url: z.string().url().optional() }).parse(req.body)
     const { rows: ex } = await db.query('SELECT id FROM products WHERE id = $1', [id])
     if (!ex[0]) throw new HttpError(404, 'Producto no encontrado')
     const { rows: cnt } = await db.query('SELECT COUNT(*)::int AS n FROM product_images WHERE product_id = $1', [id])
     if (cnt[0].n >= 8) throw new HttpError(409, 'Máximo 8 imágenes por producto')
     const { buf, source } = await loadImageInput(b)
-    if (buf.length > 6 * 1024 * 1024) throw new HttpError(400, 'La imagen supera los 6 MB')
+    if (buf.length > 11 * 1024 * 1024) throw new HttpError(400, 'La imagen supera los 11 MB')
     let out: { data: Buffer; info: { width: number; height: number } }
     try { out = await sharp(buf, { failOn: 'error' }).rotate().resize({ width: SIZES.full, height: SIZES.full, fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toBuffer({ resolveWithObject: true }) }
     catch { throw new HttpError(400, 'El archivo no es una imagen válida') }

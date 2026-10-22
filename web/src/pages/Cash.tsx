@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, gs, paymentMethodLabel, useApp } from '../api'
-import { Field, fmtDateTime, Kpi, Modal, Money, Status, Tabs, useAsk, useQuery } from '../ui'
+import { Field, fmtDateTime, Kpi, Modal, Money, Status, Tabs, useAsk, useQuery, NumInput } from '../ui'
 
 const DENOMS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 100, 50]
 const total = (d: Record<string, number>) => Object.entries(d).reduce((a, [k, n]) => a + Number(k) * (n || 0), 0)
@@ -12,7 +12,7 @@ function Denoms({ value, onChange }: { value: Record<string, number>; onChange: 
       {DENOMS.map((d) => (
         <label key={d} className="inline" style={{ justifyContent: 'space-between' }}>
           <span>{d.toLocaleString('es-PY')}</span>
-          <input type="number" min={0} style={{ width: 80 }} value={value[d] ?? ''} onChange={(e) => onChange({ ...value, [d]: Math.max(0, Number(e.target.value) || 0) })} />
+          <NumInput min={0} style={{ width: 80 }} value={value[d] ?? ''} onChange={(e) => onChange({ ...value, [d]: Math.max(0, Number(e.target.value) || 0) })} />
         </label>
       ))}
       <b className="span-all">Suma: {gs(total(value))}</b>

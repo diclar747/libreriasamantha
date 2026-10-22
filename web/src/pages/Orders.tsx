@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, gs, useApp } from '../api'
 import { printOrders, type PrintFormat } from '../printOrders'
-import { EmptyRow, Field, fmtDate, fmtDateTime, Kpi, Modal, Money, Pager, plusDays, qs, Status, Tabs, today, useAsk, useDebounced, useQuery } from '../ui'
+import { EmptyRow, Field, fmtDate, fmtDateTime, Kpi, Modal, Money, Pager, plusDays, qs, Status, Tabs, today, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 type Tab = 'pedidos' | 'comprobantes' | 'devoluciones' | 'metricas' | 'entrega' | 'cupones'
 const PAY: Record<string, string> = { pending: 'Pago pendiente', in_review: 'Comprobante en revisión', approved: 'Pagado', rejected: 'Pago rechazado', refunded: 'Reembolsado', partially_refunded: 'Reembolso parcial' }
@@ -206,7 +206,7 @@ function Coupons() {
       {f && <Modal title="Nuevo cupón" onClose={() => setF(null)} footer={<><button onClick={() => setF(null)}>Cancelar</button><button className="primary" onClick={async () => { try { await api('/coupons', { body: { code: f.code, kind: f.kind, value: f.value, minTotal: f.minTotal, maxUses: f.maxUses ? Number(f.maxUses) : null, validTo: f.validTo || null } }); toast('Cupón creado'); setF(null); list.reload() } catch (e: any) { toast(e.message, true) } }}>Crear</button></>}>
         <div className="form"><Field label="Código"><input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} /></Field><Field label="Tipo"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Porcentaje</option><option value="amount">Monto fijo</option></select></Field>
           <Field label="Valor"><Money value={f.value} onChange={(n) => setF({ ...f, value: n })} /></Field><Field label="Compra mínima"><Money value={f.minTotal} onChange={(n) => setF({ ...f, minTotal: n })} /></Field>
-          <Field label="Usos máximos"><input type="number" value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} /></Field><Field label="Vence"><input type="date" value={f.validTo} onChange={(e) => setF({ ...f, validTo: e.target.value })} /></Field></div></Modal>}
+          <Field label="Usos máximos"><NumInput value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} /></Field><Field label="Vence"><input type="date" value={f.validTo} onChange={(e) => setF({ ...f, validTo: e.target.value })} /></Field></div></Modal>}
     </div>
   )
 }

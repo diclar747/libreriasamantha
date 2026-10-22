@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, gs, paymentMethodLabel, useApp } from '../api'
-import { EmptyRow, Field, fmtDate, fmtDateTime, Kpi, Modal, Money, Pager, qs, Status, Tabs, today, useAsk, useDebounced, useQuery } from '../ui'
+import { EmptyRow, Field, fmtDate, fmtDateTime, Kpi, Modal, Money, Pager, qs, Status, Tabs, today, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 const DEPARTMENTS = ['Capital', 'Central', 'Concepción', 'San Pedro', 'Cordillera', 'Guairá', 'Caaguazú', 'Caazapá', 'Itapúa', 'Misiones', 'Paraguarí', 'Alto Paraná', 'Ñeembucú', 'Amambay', 'Canindeyú', 'Presidente Hayes', 'Boquerón', 'Alto Paraguay']
 const EMPTY = { name: '', legal_name: '', ruc: '', supplier_type: '', address: '', department: '', city: '', website: '', contact_name: '', contact_role: '', contact_phone: '', contact_email: '', phone: '', whatsapp: '', email: '', terms: '', notes: '',
@@ -163,7 +163,7 @@ export default function Suppliers() {
           <Field label="Teléfono del contacto" error={E('contact_phone')}><input value={form.contact_phone} onChange={set('contact_phone')} /></Field>
           <Field label="Correo del contacto" error={E('contact_email')}><input value={form.contact_email} onChange={set('contact_email')} /></Field>
           <Field label="Condición de pago"><select value={form.payment_condition} onChange={set('payment_condition')}><option value="credit">Crédito</option><option value="cash">Contado</option></select></Field>
-          {form.payment_condition === 'credit' && <Field label="Días de crédito"><input type="number" min={0} max={365} value={form.payment_days} onChange={(e) => setF2('payment_days', Number(e.target.value))} /></Field>}
+          {form.payment_condition === 'credit' && <Field label="Días de crédito"><NumInput min={0} max={365} value={form.payment_days} onChange={(e) => setF2('payment_days', Number(e.target.value))} /></Field>}
           <Field label="Banco"><input value={form.bank_name} onChange={set('bank_name')} /></Field><Field label="N.º de cuenta"><input value={form.bank_account} onChange={set('bank_account')} /></Field>
           <Field label="Titular de la cuenta"><input value={form.bank_holder} onChange={set('bank_holder')} /></Field><Field label="Alias"><input value={form.bank_alias} onChange={set('bank_alias')} /></Field>
           <Field label="Condiciones comerciales" span={2}><input value={form.terms} onChange={set('terms')} placeholder="Descuentos, mínimos, plazos de entrega…" /></Field>

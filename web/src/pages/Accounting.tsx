@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NumInput } from '../ui'
 import { api, gs, useApp } from '../api'
 
 type Tab = 'journal' | 'ledger' | 'trial' | 'income' | 'balance' | 'entry'
@@ -99,8 +100,8 @@ export default function Accounting() {
           {entry.lines.map((l, i) => (
             <div className="form" key={i}>
               <label>Cuenta<select value={l.code} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((x, j) => j === i ? { ...x, code: e.target.value } : x) })}>{accounts.map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}</select></label>
-              <label>Debe<input type="number" value={l.debit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((x, j) => j === i ? { ...x, debit: e.target.value } : x) })} /></label>
-              <label>Haber<input type="number" value={l.credit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((x, j) => j === i ? { ...x, credit: e.target.value } : x) })} /></label>
+              <label>Debe<NumInput value={l.debit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((x, j) => j === i ? { ...x, debit: e.target.value } : x) })} /></label>
+              <label>Haber<NumInput value={l.credit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((x, j) => j === i ? { ...x, credit: e.target.value } : x) })} /></label>
             </div>
           ))}
           <div className="row"><button onClick={() => setEntry({ ...entry, lines: [...entry.lines, { code: '1.1.01', debit: '', credit: '' }] })}>+ Línea</button><button className="primary" onClick={saveEntry}>Registrar asiento</button></div>

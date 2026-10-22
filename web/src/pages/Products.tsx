@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, gs, useApp } from '../api'
 import { Scanner } from '../components/Scanner'
-import { EmptyRow, Field, fileToBase64, fmtDate, fmtDateTime, Modal, Money, openAuthed, Pager, qs, Status, Tabs, useAsk, useDebounced, useQuery } from '../ui'
+import { EmptyRow, Field, fileToBase64, fmtDate, fmtDateTime, Modal, Money, openAuthed, Pager, qs, Status, Tabs, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 const CSV_COLS = ['code', 'name', 'category', 'subcategory', 'brand', 'barcode', 'isbn', 'cost', 'price', 'tax_rate', 'min_stock', 'purchase_unit', 'units_per_purchase', 'kind']
 const NUMERIC = ['cost', 'price', 'tax_rate', 'min_stock', 'units_per_purchase']
@@ -33,6 +33,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
   const [needConfirm, setNeedConfirm] = useState(false)
   const [scan, setScan] = useState<'barcode' | 'isbn' | 'qr_code' | null>(null)
   const [url, setUrl] = useState('')
+  const [pending, setPending] = useState<File[]>([]) // fotos elegidas antes de guardar un producto nuevo
   const [calc, setCalc] = useState<any>(null)
   const facets = useQuery<any>('/products/facets')
   const suppliers = useQuery<any[]>('/suppliers')
@@ -64,8 +65,14 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
     if (id) delete body.initial_stock
     if (!canCost) for (const k of ['cost', 'cost_includes_vat', 'markup_pct']) delete body[k]
     try {
-      if (id) await api('/products/' + id, { method: 'PUT', body }); else await api('/products', { body })
-      toast('Producto guardado'); onSaved()
+      let failed = 0
+      if (id) await api('/products/' + id, { method: 'PUT', body })
+      else {
+        const created = await api('/products', { body })
+        for (const file of pending) { try { await api(`/products/${created.id}/images`, { body: { data: await fileToBase64(file) } }) } catch { failed++ } }
+      }
+      if (failed) toast(`Producto guardado, pero ${failed} foto(s) no se pudieron subir: abrilo y agregalas de nuevo`, true); else toast(pending.length ? 'Producto guardado con sus fotos' : 'Producto guardado')
+      onSaved()
     } catch (e: any) {
       if (/por debajo del costo/.test(e.message) && /Confirmá/.test(e.message)) setNeedConfirm(true); else setErrs(e.message)
     }
@@ -82,7 +89,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
 
   return (
     <Modal title={id ? `Editar: ${f.name || 'producto'}` : 'Nuevo producto'} onClose={onClose} wide="xl" footer={<><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => save(false)}>Guardar</button></>}>
-      <Tabs value={tab} onChange={setTab} tabs={[['datos', 'Datos'], ['precios', 'Precios e IVA'], ['oferta', 'Oferta'], ['imagenes', 'Imágenes', imgs.length || undefined], ['proveedores', 'Proveedores'], ...(id ? [['historial', 'Historial'] as ['historial', string]] : [])]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['datos', 'Datos'], ['precios', 'Precios e IVA'], ['oferta', 'Oferta'], ['imagenes', 'Imágenes', (id ? imgs.length : pending.length) || undefined], ['proveedores', 'Proveedores'], ...(id ? [['historial', 'Historial'] as ['historial', string]] : [])]} />
       {errs && <div className="errbox">{errs}</div>}
       {needConfirm && <div className="warnbox">El precio (o la oferta) queda <b>por debajo del costo</b>. <button className="small" onClick={() => { setNeedConfirm(false); save(true) }}>Guardar igual</button></div>}
 
@@ -128,7 +135,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
           <div className="form fgrid">
             <Field label="Unidad de venta"><input value={f.sale_unit} onChange={set('sale_unit')} list="units" /></Field>
             <Field label="Unidad de compra"><input value={f.purchase_unit} onChange={set('purchase_unit')} list="units" /></Field><datalist id="units">{(facets.data?.units ?? ['unidad', 'caja', 'paquete', 'resma']).map((u: string) => <option key={u} value={u} />)}</datalist>
-            <Field label="Unidades por compra" hint="Cuántas unidades de venta trae una de compra"><input type="number" min={1} value={f.units_per_purchase} onChange={(e) => setF({ ...f, units_per_purchase: Math.max(1, Number(e.target.value)) })} /></Field>
+            <Field label="Unidades por compra" hint="Cuántas unidades de venta trae una de compra"><NumInput min={1} value={f.units_per_purchase} onChange={(e) => setF({ ...f, units_per_purchase: Math.max(1, Number(e.target.value)) })} /></Field>
             <Field label="Ubicación"><input value={f.location} onChange={set('location')} placeholder="Estante, pasillo…" /></Field>
           </div>
         </section>
@@ -147,13 +154,13 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
           {canCost && <>
             <Field label="Costo (sin IVA salvo que marques)"><Money value={f.cost} onChange={(n) => setF({ ...f, cost: n })} /></Field>
             <label className="inline" style={{ alignSelf: 'end' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.cost_includes_vat} onChange={set('cost_includes_vat')} /> El costo ya incluye IVA</label>
-            <Field label="Margen sobre costo (%)"><input type="number" min={0} step="0.5" value={f.markup_pct ?? ''} onChange={(e) => applyMarkup(e.target.value === '' ? null : Number(e.target.value))} /></Field>
+            <Field label="Margen sobre costo (%)"><NumInput min={0} step="0.5" value={f.markup_pct ?? ''} onChange={(e) => applyMarkup(e.target.value === '' ? null : Number(e.target.value))} /></Field>
           </>}
           <Field label="IVA"><select value={f.tax_rate} onChange={(e) => setF({ ...f, tax_rate: Number(e.target.value) })}><option value={10}>10%</option><option value={5}>5%</option><option value={0}>Exento</option></select></Field>
           <Field label="Precio de venta (IVA incluido) *"><Money value={f.price} onChange={(n) => setF({ ...f, price: n })} /></Field>
           <Field label="Precio mayorista"><Money value={f.wholesale_price} onChange={(n) => setF({ ...f, wholesale_price: n || null })} /></Field>
-          <Field label="Stock mínimo" hint="Avisa cuando el disponible llega a este número"><input type="number" min={0} value={f.min_stock} onChange={(e) => setF({ ...f, min_stock: Number(e.target.value) })} /></Field>
-          {!id && f.kind === 'product' && <Field label="Stock inicial"><input type="number" min={0} value={f.initial_stock} onChange={(e) => setF({ ...f, initial_stock: Number(e.target.value) })} /></Field>}
+          <Field label="Stock mínimo" hint="Avisa cuando el disponible llega a este número"><NumInput min={0} value={f.min_stock} onChange={(e) => setF({ ...f, min_stock: Number(e.target.value) })} /></Field>
+          {!id && f.kind === 'product' && <Field label="Stock inicial"><NumInput min={0} value={f.initial_stock} onChange={(e) => setF({ ...f, initial_stock: Number(e.target.value) })} /></Field>}
         </div>
         <div className="calc">
           <span>Precio sin IVA: <b>{gs(f.price - Math.round(f.tax_rate === 10 ? f.price / 11 : f.tax_rate === 5 ? f.price / 21 : 0))}</b> · IVA incluido: <b>{gs(f.tax_rate === 10 ? Math.round(f.price / 11) : f.tax_rate === 5 ? Math.round(f.price / 21) : 0)}</b></span>
@@ -167,7 +174,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
         <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={f.offer_enabled} onChange={set('offer_enabled')} /> Oferta activa</label>
         {f.offer_enabled && <div className="form wide">
           <Field label="Precio de oferta"><Money value={f.offer_price} onChange={(n) => setF({ ...f, offer_price: n || null, offer_pct: n ? null : f.offer_pct })} /></Field>
-          <Field label="o descuento (%)"><input type="number" min={0} max={99} value={f.offer_pct ?? ''} onChange={(e) => setF({ ...f, offer_pct: e.target.value ? Number(e.target.value) : null, offer_price: e.target.value ? null : f.offer_price })} /></Field>
+          <Field label="o descuento (%)"><NumInput min={0} max={99} value={f.offer_pct ?? ''} onChange={(e) => setF({ ...f, offer_pct: e.target.value ? Number(e.target.value) : null, offer_price: e.target.value ? null : f.offer_price })} /></Field>
           <Field label="Desde"><input type="date" value={f.offer_start ?? ''} onChange={set('offer_start')} /></Field><Field label="Hasta"><input type="date" value={f.offer_end ?? ''} onChange={set('offer_end')} /></Field>
           <Field label="Dónde aplica"><select value={f.offer_channel} onChange={set('offer_channel')}><option value="both">Local y tienda online</option><option value="local">Solo en el local</option><option value="online">Solo en la tienda online</option></select></Field>
           <Field label="Etiqueta"><input value={f.offer_label} onChange={set('offer_label')} placeholder="Vuelta a clases" maxLength={40} /></Field>
@@ -176,11 +183,15 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
       </div>}
 
       {tab === 'imagenes' && <div className="stack">
-        {!id && <div className="warnbox">Guardá el producto y después agregale las imágenes.</div>}
+        {!id && <>
+          <div className="gallery">{pending.map((file, i) => <figure key={i}><img src={URL.createObjectURL(file)} alt="" />{i === 0 && <span className="pill ok" style={{ position: 'absolute', top: 6, left: 6 }}>Principal</span>}
+            <figcaption><button className="small danger" onClick={() => setPending(pending.filter((_, j) => j !== i))}>✕</button></figcaption></figure>)}</div>
+          <label className="drop">📷 Sacá una foto o elegí imágenes (se suben solas al guardar el producto · máximo 8)<input type="file" accept="image/*" multiple hidden onChange={(e) => { setPending([...pending, ...[...(e.target.files ?? [])]].slice(0, 8)); e.target.value = '' }} /></label>
+        </>}
         {id && <>
           <div className="gallery">{imgs.map((im, i) => <figure key={im.id}><img src={im.thumb} alt="" />{i === 0 && <span className="pill ok" style={{ position: 'absolute', top: 6, left: 6 }}>Principal</span>}
             <figcaption><button className="small" onClick={() => move(i, -1)} disabled={i === 0}>←</button><button className="small danger" onClick={() => delImg(im.id)}>✕</button><button className="small" onClick={() => move(i, 1)} disabled={i === imgs.length - 1}>→</button></figcaption></figure>)}</div>
-          <label className="drop">Tocá para subir imágenes (JPG, PNG o WebP · hasta 6 MB · máximo 8)<input type="file" accept="image/*" multiple hidden onChange={async (e) => { for (const file of [...(e.target.files ?? [])]) await addImage(file); e.target.value = '' }} /></label>
+          <label className="drop">📷 Sacá una foto o elegí imágenes (JPG, PNG, WebP · se reducen solas · máximo 8)<input type="file" accept="image/*" multiple hidden onChange={async (e) => { for (const file of [...(e.target.files ?? [])]) await addImage(file); e.target.value = '' }} /></label>
           <div className="row"><input style={{ flex: 1 }} placeholder="o pegá la dirección (URL) de una imagen" value={url} onChange={(e) => setUrl(e.target.value)} /><button disabled={!url} onClick={() => addImage(null, url)}>Agregar desde la URL</button></div>
           <p className="muted">La primera imagen es la principal. Se optimizan solas para que la tienda cargue rápido.</p>
         </>}
@@ -310,7 +321,7 @@ export default function Products() {
 
       {editing && <ProductForm id={editing.id} canCost={showCost || staff} canPrice={staff} onClose={() => { setEditing(null); if (sp.get('open')) setSp({}) }} onSaved={() => { setEditing(null); reloadAll() }} />}
       {adj && <Modal title={`Ajustar stock de ${adj.name}`} onClose={() => setAdj(null)} footer={<><button onClick={() => setAdj(null)}>Cancelar</button><button className="primary" disabled={!Number(adj.delta) || adj.reason.length < 3} onClick={adjust}>Aplicar</button></>}>
-        <div className="form"><Field label="Cantidad (+ entra / − sale)"><input type="number" autoFocus value={adj.delta} onChange={(e) => setAdj({ ...adj, delta: e.target.value })} /></Field>
+        <div className="form"><Field label="Cantidad (+ entra / − sale)"><NumInput autoFocus value={adj.delta} onChange={(e) => setAdj({ ...adj, delta: e.target.value })} /></Field>
           <Field label="Motivo"><input value={adj.reason} onChange={(e) => setAdj({ ...adj, reason: e.target.value })} placeholder="Inventario físico, dañado…" /></Field></div>
         <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={!!adj.initial} onChange={(e) => setAdj({ ...adj, initial: e.target.checked })} /> Es inventario inicial (carga de apertura)</label>
       </Modal>}

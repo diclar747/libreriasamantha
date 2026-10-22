@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NumInput } from '../ui'
 import { Link } from 'react-router-dom'
 import { api, gs, useApp } from '../api'
 
@@ -39,7 +40,7 @@ export default function Settings() {
           <label>Horarios<input value={shop.hours ?? ''} onChange={s('hours')} /></label>
           <label>WhatsApp del negocio<input value={shop.whatsapp ?? ''} onChange={s('whatsapp')} /></label>
           <label>WhatsApp del encargado (alertas)<input value={shop.managerPhone ?? ''} onChange={s('managerPhone')} /></label>
-          <label>Minutos de reserva de stock en pedidos<input type="number" value={shop.reserveMinutes ?? 30} onChange={(e) => setShop({ ...shop, reserveMinutes: Number(e.target.value) })} /></label>
+          <label>Minutos de reserva de stock en pedidos<NumInput value={shop.reserveMinutes ?? 30} onChange={(e) => setShop({ ...shop, reserveMinutes: Number(e.target.value) })} /></label>
           <button className="primary" onClick={() => save('shop', shop)}>Guardar</button>
         </div>
         <div className="card" style={{ display: 'grid', gap: 10 }}>

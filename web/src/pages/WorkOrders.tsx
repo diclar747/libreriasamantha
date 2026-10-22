@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NumInput } from '../ui'
 import { api, gs, useApp } from '../api'
 
 const LABEL: Record<string, [string, string]> = {
@@ -49,13 +50,13 @@ export default function WorkOrders() {
             <label>Cliente<input value={form.customerName} onChange={set('customerName')} /></label>
             <label>Teléfono<input value={form.phone} onChange={set('phone')} /></label>
             <label>Descripción<input value={form.description} onChange={set('description')} /></label>
-            <label>Copias<input type="number" min={1} value={form.copies} onChange={set('copies', true)} /></label>
-            <label>Páginas por copia<input type="number" min={1} value={form.pages} onChange={set('pages', true)} /></label>
+            <label>Copias<NumInput min={1} value={form.copies} onChange={set('copies', true)} /></label>
+            <label>Páginas por copia<NumInput min={1} value={form.pages} onChange={set('pages', true)} /></label>
             <label>Papel<select value={form.paper} onChange={set('paper')}><option>A4</option><option>Oficio</option><option>A3</option></select></label>
             <label>Terminación<select value={form.finishing} onChange={set('finishing')}><option value="">Ninguna</option><option value="anillado">Anillado</option><option value="plastificado">Plastificado</option><option value="cortado">Cortado</option></select></label>
             <label>Archivo<input value={form.fileName} onChange={set('fileName')} placeholder="nombre del archivo recibido" /></label>
             <label className="row" style={{ flexDirection: 'row', alignSelf: 'end' }}><input type="checkbox" style={{ width: 'auto' }} checked={form.color} onChange={(e) => setForm({ ...form, color: e.target.checked })} /> A color</label>
-            <label>Precio (vacío = tarifa)<input type="number" value={form.price ?? ''} onChange={set('price')} placeholder={est !== null ? String(est) : ''} /></label>
+            <label>Precio (vacío = tarifa)<NumInput value={form.price ?? ''} onChange={set('price')} placeholder={est !== null ? String(est) : ''} /></label>
           </div>
           <p>Presupuesto estimado: <b>{est !== null ? gs(est) : '—'}</b></p>
           <div className="row"><button className="primary" onClick={save}>Crear</button><button onClick={() => setForm(null)}>Cancelar</button></div>

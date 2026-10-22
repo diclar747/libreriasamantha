@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, gs, paymentMethodLabel, useApp } from '../api'
-import { EmptyRow, Field, fmtDateTime, Modal, Pager, qs, Status, useAsk, useDebounced, useQuery } from '../ui'
+import { EmptyRow, Field, fmtDateTime, Modal, Pager, qs, Status, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
   const { user, toast } = useApp()
@@ -38,7 +38,7 @@ function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void
       </div>
       {ret && <Modal title="Devolución de mercadería" onClose={() => setRet(null)} wide footer={<><button onClick={() => setRet(null)}>Cancelar</button><button className="primary" disabled={ret.reason.length < 3 || !Object.values(ret.qty).some((n) => Number(n) > 0)} onClick={doReturn}>Registrar devolución</button></>}>
         <table><thead><tr><th>Producto</th><th className="num">Vendido</th><th className="num">Ya devuelto</th><th className="num">Devolver</th></tr></thead>
-          <tbody>{s.items.map((i: any) => <tr key={i.id}><td>{i.name}</td><td className="num">{i.qty}</td><td className="num">{i.returned_qty}</td><td className="num"><input type="number" min={0} max={i.qty - i.returned_qty} style={{ width: 80 }} value={ret.qty[i.id] ?? 0} onChange={(e) => setRet({ ...ret, qty: { ...ret.qty, [i.id]: Math.min(i.qty - i.returned_qty, Math.max(0, Number(e.target.value))) } })} /></td></tr>)}</tbody></table>
+          <tbody>{s.items.map((i: any) => <tr key={i.id}><td>{i.name}</td><td className="num">{i.qty}</td><td className="num">{i.returned_qty}</td><td className="num"><NumInput min={0} max={i.qty - i.returned_qty} style={{ width: 80 }} value={ret.qty[i.id] ?? 0} onChange={(e) => setRet({ ...ret, qty: { ...ret.qty, [i.id]: Math.min(i.qty - i.returned_qty, Math.max(0, Number(e.target.value))) } })} /></td></tr>)}</tbody></table>
         <div className="form"><Field label="Motivo" span={2}><input value={ret.reason} onChange={(e) => setRet({ ...ret, reason: e.target.value })} /></Field>
           <Field label="Devolver el dinero en"><select value={ret.method} onChange={(e) => setRet({ ...ret, method: e.target.value })}><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="card">Tarjeta</option><option value="qr">QR</option></select></Field></div>
         <label className="inline"><input type="checkbox" style={{ width: 'auto' }} checked={ret.restock} onChange={(e) => setRet({ ...ret, restock: e.target.checked })} /> La mercadería vuelve al stock (desmarcá si está dañada)</label>

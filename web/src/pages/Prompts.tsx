@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NumInput } from '../ui'
 import { Link } from 'react-router-dom'
 import { api, useApp } from '../api'
 
@@ -80,7 +81,7 @@ export default function Prompts() {
             <label>Título<input value={form.title} onChange={set('title')} /></label>
             <label>Identificador<input value={form.slug} onChange={set('slug')} disabled={!!form.id} placeholder="envios, promociones…" /></label>
             <label>Tipo<select value={form.kind} onChange={set('kind')}><option value="system">Identidad y tono</option><option value="rules">Reglas</option><option value="knowledge">Conocimiento del negocio</option></select></label>
-            <label>Orden<input type="number" value={form.sort} onChange={set('sort')} /></label>
+            <label>Orden<NumInput value={form.sort} onChange={set('sort')} /></label>
           </div>
           <label>Contenido<textarea rows={9} value={form.content} onChange={set('content')} style={{ resize: 'vertical' }} placeholder="Escribí en lenguaje natural. Ej.: El delivery llega en 24 horas hábiles…" /></label>
           <label className="row" style={{ flexDirection: 'row' }}><input type="checkbox" style={{ width: 'auto' }} checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Activo</label>
