@@ -83,7 +83,16 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
   }
   const imgs: any[] = detail.data?.images ?? []
   const move = async (i: number, d: number) => { const ids = imgs.map((x) => x.id); const j = i + d; if (j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; await api(`/products/${id}/images/order`, { method: 'PUT', body: { ids } }); detail.reload() }
-  const delImg = async (iid: number) => { await api(`/products/${id}/images/${iid}`, { method: 'DELETE' }); detail.reload() }
+  const delImg = async (iid: number) => { try { await api(`/products/${id}/images/${iid}`, { method: 'DELETE' }); toast('Imagen eliminada'); detail.reload() } catch (e: any) { toast(e.message, true) } }
+  // Cambiar una foto: sube la nueva en el mismo lugar y quita la anterior (si ya hay 8, primero se quita la vieja).
+  const replaceImg = async (iid: number, file: File) => {
+    try {
+      const data = await fileToBase64(file)
+      if (imgs.length >= 8) { await api(`/products/${id}/images/${iid}`, { method: 'DELETE' }); await api(`/products/${id}/images`, { body: { data } }) }
+      else { const r = await api(`/products/${id}/images`, { body: { data } }); await api(`/products/${id}/images/order`, { method: 'PUT', body: { ids: imgs.map((x) => (x.id === iid ? r.id : x.id)) } }); await api(`/products/${id}/images/${iid}`, { method: 'DELETE' }) }
+      toast('Foto cambiada'); detail.reload()
+    } catch (e: any) { toast(e.message, true); detail.reload() }
+  }
   const offerPreview = f.offer_enabled ? (f.offer_price ?? (f.offer_pct ? Math.round(f.price * (1 - f.offer_pct / 100)) : null)) : null
   const catList = facets.data?.categories ?? []
 
@@ -190,7 +199,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
         </>}
         {id && <>
           <div className="gallery">{imgs.map((im, i) => <figure key={im.id}><img src={im.thumb} alt="" />{i === 0 && <span className="pill ok" style={{ position: 'absolute', top: 6, left: 6 }}>Principal</span>}
-            <figcaption><button className="small" onClick={() => move(i, -1)} disabled={i === 0}>←</button><button className="small danger" onClick={() => delImg(im.id)}>✕</button><button className="small" onClick={() => move(i, 1)} disabled={i === imgs.length - 1}>→</button></figcaption></figure>)}</div>
+            <figcaption><button className="small" onClick={() => move(i, -1)} disabled={i === 0}>←</button><button className="small danger" title="Quitar esta foto" onClick={() => delImg(im.id)}>✕</button><label className="btn small" style={{ cursor: 'pointer' }} title="Cambiar por otra foto">Cambiar<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) replaceImg(im.id, f) }} /></label><button className="small" onClick={() => move(i, 1)} disabled={i === imgs.length - 1}>→</button></figcaption></figure>)}</div>
           <label className="drop">📷 Sacá una foto o elegí imágenes (JPG, PNG, WebP · se reducen solas · máximo 8)<input type="file" accept="image/*" multiple hidden onChange={async (e) => { for (const file of [...(e.target.files ?? [])]) await addImage(file); e.target.value = '' }} /></label>
           <div className="row"><input style={{ flex: 1 }} placeholder="o pegá la dirección (URL) de una imagen" value={url} onChange={(e) => setUrl(e.target.value)} /><button disabled={!url} onClick={() => addImage(null, url)}>Agregar desde la URL</button></div>
           <p className="muted">La primera imagen es la principal. Se optimizan solas para que la tienda cargue rápido.</p>

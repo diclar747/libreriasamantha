@@ -35,6 +35,14 @@ const BODY_LIMIT = 16 * 1024 * 1024
 export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } } = {}) {
   const logger = process.env.NODE_ENV !== 'test'
   const app = (opts.https ? Fastify({ logger, https: opts.https, bodyLimit: BODY_LIMIT }) : Fastify({ logger, bodyLimit: BODY_LIMIT })) as unknown as FastifyInstance
+  // El navegador manda `content-type: application/json` también en DELETE y otras llamadas sin cuerpo; Fastify las rechazaba con
+  // "Body cannot be empty..." y por eso no se podían borrar fotos ni productos. Un cuerpo vacío se toma como "sin datos".
+  const jsonParse = app.getDefaultJsonParser('error', 'error')
+  app.removeContentTypeParser('application/json')
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    if (typeof body !== 'string' || body.trim() === '') return done(null, undefined)
+    jsonParse(req, body, done)
+  })
   app.register(cors, { origin: true })
   // Cabeceras de seguridad. La cámara se permite solo a la propia app (escáner de códigos).
   app.addHook('onSend', async (req, reply) => {

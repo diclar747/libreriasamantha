@@ -9,7 +9,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const token = localStorage.getItem(TOKEN_KEY)
   const res = await fetch('/api' + path, {
     method: opts.method ?? (opts.body ? 'POST' : 'GET'),
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { ...(opts.body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
