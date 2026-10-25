@@ -22,10 +22,20 @@ function applyArea(path: string) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', store ? '#2f4a2d' : adminBarColor())
 }
 
+// Hash del bundle que está corriendo ahora mismo (lo pone Vite en el nombre del archivo). Se compara con el que el servidor
+// reporta en /api/version — que va SIN caché — para saber si hay una versión nueva, sin depender del service worker
+// (Cloudflare retiene el sw.js hasta 4 h, así que no sirve para enterarse a tiempo).
+function ownBuild(): string | null {
+  const src = [...document.querySelectorAll('script[src]')].map((s) => s.getAttribute('src') ?? '').find((s) => /\/assets\/index-[\w-]+\.js/.test(s))
+  const m = (src || import.meta.url).match(/index-([\w-]+)\.js/)
+  return m ? m[1] : null
+}
+
 export function InstallProvider({ children }: { children: ReactNode }) {
   const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = useState(isStandalone())
-  const [waiting, setWaiting] = useState<ServiceWorker | null>(null)
+  const [update, setUpdate] = useState(false)
+  const waitingRef = useState<{ sw: ServiceWorker | null }>({ sw: null })[0]
   const { pathname } = useLocation()
   useEffect(() => { applyArea(pathname) }, [pathname])
   useEffect(() => {
@@ -33,30 +43,45 @@ export function InstallProvider({ children }: { children: ReactNode }) {
     const onInstalled = () => { setEvt(null); setInstalled(true) }
     window.addEventListener('beforeinstallprompt', onPrompt)
     window.addEventListener('appinstalled', onInstalled)
-    let refresh = false
+    const own = ownBuild()
+    // Pregunta al servidor qué versión está publicada; si cambió, avisa.
+    const checkVersion = async () => {
+      if (!own) return
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store' })
+        if (!r.ok) return
+        const { build } = await r.json()
+        if (build && build !== 'dev' && build !== own) setUpdate(true)
+      } catch { /* sin conexión */ }
+    }
+    const timers: ReturnType<typeof setInterval>[] = []
+    checkVersion()
+    timers.push(setInterval(checkVersion, 5 * 60 * 1000))
+    const onVisible = () => { if (document.visibilityState === 'visible') checkVersion() }
+    document.addEventListener('visibilitychange', onVisible)
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register(import.meta.env.PROD ? '/sw.js' : '/sw.js?dev=1').then((reg) => {
-        // Hay una versión nueva esperando: se avisa y se aplica cuando el usuario lo pide.
-        if (reg.waiting && navigator.serviceWorker.controller) setWaiting(reg.waiting)
+        if (reg.waiting && navigator.serviceWorker.controller) { waitingRef.sw = reg.waiting; setUpdate(true) }
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing
-          sw?.addEventListener('statechange', () => { if (sw.state === 'installed' && navigator.serviceWorker.controller) setWaiting(sw) })
+          sw?.addEventListener('statechange', () => { if (sw.state === 'installed' && navigator.serviceWorker.controller) { waitingRef.sw = sw; setUpdate(true) } })
         })
-        const check = () => reg.update().catch(() => {})
-        const t = setInterval(check, 60 * 60 * 1000)
-        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check() })
-        return () => clearInterval(t)
+        timers.push(setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000))
       }).catch(() => {})
-      navigator.serviceWorker.addEventListener('controllerchange', () => { if (refresh) location.reload() })
-      ;(window as any).__applyUpdate = () => { refresh = true }
     }
-    return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled) }
+    return () => { timers.forEach(clearInterval); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled) }
   }, [])
-  const update = () => { (window as any).__applyUpdate?.(); waiting?.postMessage({ type: 'SKIP_WAITING' }) }
+  // Al actualizar: limpia la caché del navegador y recarga para traer el código nuevo (el HTML va sin caché y los archivos
+  // llevan un nombre nuevo, así que la recarga obtiene la versión fresca aunque el service worker viejo siga activo).
+  const applyUpdate = async () => {
+    try { waitingRef.sw?.postMessage({ type: 'SKIP_WAITING' }) } catch { /* no hay SW esperando */ }
+    try { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))) } catch { /* sin caché */ }
+    location.reload()
+  }
   return (
     <Ctx.Provider value={{ canInstall: !!evt, prompt: () => { evt?.prompt(); setEvt(null) }, installed, ios: isIos() }}>
       {children}
-      {waiting && <div className="pwa-toast" role="status"><span><b>Hay una versión nueva</b><small>Actualizá para ver las últimas mejoras.</small></span><button className="primary" onClick={update}>Actualizar</button><button className="pwa-x" onClick={() => setWaiting(null)} aria-label="Ahora no">×</button></div>}
+      {update && <div className="pwa-toast" role="status"><span><b>Hay una versión nueva</b><small>Actualizá para ver las últimas mejoras.</small></span><button className="primary" onClick={applyUpdate}>Actualizar</button><button className="pwa-x" onClick={() => setUpdate(false)} aria-label="Ahora no">×</button></div>}
     </Ctx.Provider>
   )
 }

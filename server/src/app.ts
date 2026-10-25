@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ZodError, z } from 'zod'
 import { ROLES, authenticate, can, clientIp, hashPassword, isDefaultPassword, loginBlocked, loginFailed, loginOk, newToken, requirePerm, verifyPassword } from './auth.js'
@@ -71,7 +71,15 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
     return reply.code(err.statusCode ?? 500).send({ error: err.statusCode ? err.message : 'Error interno' })
   })
 
+  // Identificador de la versión publicada: el hash del bundle principal que referencia el index.html que sirve este servidor.
+  // La app compara su propio bundle con este valor (por una ruta sin caché) y así detecta una versión nueva aunque Cloudflare
+  // retenga el service worker. Se calcula una vez al iniciar.
+  const buildId = (() => {
+    try { const html = readFileSync(fileURLToPath(new URL('../../web/dist/index.html', import.meta.url)), 'utf8'); return (html.match(/assets\/index-([A-Za-z0-9_-]+)\.js/) ?? [])[1] ?? 'dev' } catch { return 'dev' }
+  })()
+
   app.register(async (api) => {
+    api.get('/version', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return { build: buildId } })
     api.post('/login', async (req) => {
       const b = z.object({ username: z.string().max(80), password: z.string().max(200) }).parse(req.body)
       const ip = clientIp(req)

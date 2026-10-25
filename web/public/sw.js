@@ -1,6 +1,6 @@
 // Service worker de Samantha: la app abre sin conexión, las fotos y el catálogo se guardan para verlos de nuevo
 // y las actualizaciones se avisan al usuario. Nunca guarda datos de la administración (todo /api/ autenticado).
-const VERSION = 'samantha-v5'
+const VERSION = 'samantha-v6'
 const SHELL = `shell-${VERSION}`, ASSETS = `assets-${VERSION}`, IMAGES = `img-${VERSION}`, API = `api-${VERSION}`
 const CURRENT = [SHELL, ASSETS, IMAGES, API]
 const PRECACHE = ['/', '/tienda', '/offline.html', '/favicon.svg', '/icons/samantha-192-v2.png', '/icons/samantha-512-v2.png', '/brand/samantha-lockup.png', '/brand/samantha-wordmark.png', '/manifest-store.webmanifest?v=2', '/manifest-admin.webmanifest?v=2']
