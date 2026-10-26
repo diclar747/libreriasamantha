@@ -1,4 +1,4 @@
-import { chromium } from './pw/node_modules/playwright/index.mjs'
+import pkg from '/tmp/pwcore/node_modules/playwright-core/index.js'; const { chromium } = pkg
 import { login } from './t-lib.mjs'
 const tk = await login('admin', 'admin1234')
 const b = await chromium.launch({ executablePath: '/root/.cache/ms-playwright/chromium-1187/chrome-linux/chrome', args: ['--no-sandbox'] })

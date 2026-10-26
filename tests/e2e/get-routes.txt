@@ -111,6 +111,7 @@
 /suppliers/:id/statement
 /suppliers/:id/uninvoiced
 /users
+/version
 /workorders
 /zones
 content-type

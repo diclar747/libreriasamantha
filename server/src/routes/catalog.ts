@@ -82,7 +82,15 @@ function hideCost<T extends Record<string, any>>(role: string, p: T): T {
   return out as T
 }
 
-const dateStr = (v: unknown) => (v instanceof Date ? new Date(v.getTime() - v.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : v == null ? null : String(v).slice(0, 10))
+// Fecha como 'YYYY-MM-DD'. Para una fecha real (Date) o una marca de tiempo ISO se recorta a los primeros 10 caracteres;
+// cualquier otro texto se devuelve COMPLETO (antes se cortaba todo a 10 caracteres y una edición como "Devocional" →
+// "Devocionales" parecía "sin cambios" y no se guardaba).
+const dateStr = (v: unknown) => {
+  if (v instanceof Date) return new Date(v.getTime() - v.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  if (v == null) return null
+  const s = String(v)
+  return /^\d{4}-\d{2}-\d{2}T/.test(s) ? s.slice(0, 10) : s
+}
 
 function decorate(p: any) {
   const loc = effectivePrice(p, 'local'), onl = effectivePrice(p, 'online')
