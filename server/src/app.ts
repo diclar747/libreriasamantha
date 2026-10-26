@@ -65,6 +65,8 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
     if (err instanceof ZodError) return reply.code(400).send({ error: 'Datos inválidos', issues: err.issues })
     // Texto/fecha/número con formato inválido que llega desde un filtro o un enlace: es un error del pedido, no del servidor.
     if (['22P02', '22007', '22008', '22003', '22001'].includes(err.code)) return reply.code(400).send({ error: 'Datos inválidos' })
+    // Choque de un valor único (código, código de barras, etc.): es un conflicto, no un error del servidor.
+    if (err.code === '23505') return reply.code(409).send({ error: 'Ese dato ya está en uso por otro registro (por ejemplo el código o el código de barras). Revisá y probá de nuevo.' })
     if (err.code === '23514' || err.code === '23503') return reply.code(400).send({ error: 'Datos inválidos: ' + err.detail })
     app.log.error(err)
     if (process.env.DEBUG_ERRORS) console.error(err)

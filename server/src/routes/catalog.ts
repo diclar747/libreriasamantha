@@ -308,7 +308,9 @@ export function catalogRoutes(app: FastifyInstance, db: Db) {
     const b = productBody.parse(req.body)
     validate(b, can(req.user!.role, 'price.override'), !!x.confirmBelowCost)
     const created = await withTx(db, async (tx) => {
-      b.code = b.code || (await nextCode(tx))
+      // Código automático: se toma un candado por transacción para que dos altas a la vez (doble toque, red lenta)
+      // no reciban el mismo número y una falle. El candado se libera solo al terminar la transacción.
+      if (!b.code) { await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['samantha:product_code']); b.code = await nextCode(tx) }
       await ensureUnique(tx, b)
       const { rows } = await tx.query(`INSERT INTO products (${FIELDS.join(', ')}) VALUES (${FIELDS.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`, FIELDS.map((f) => b[f] ?? null))
       const p = rows[0]

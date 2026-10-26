@@ -31,6 +31,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
   const [f, setF] = useState<any>(null)
   const [errs, setErrs] = useState<string | null>(null)
   const [needConfirm, setNeedConfirm] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [scan, setScan] = useState<'barcode' | 'isbn' | 'qr_code' | null>(null)
   const [url, setUrl] = useState('')
   const [pending, setPending] = useState<File[]>([]) // fotos elegidas antes de guardar un producto nuevo
@@ -56,6 +57,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
   const applyMarkup = (m: number | null) => { if (m == null) { setF({ ...f, markup_pct: null }); return } api('/products/price-calc', { body: { cost: f.cost, cost_includes_vat: f.cost_includes_vat, tax_rate: f.tax_rate, markup_pct: m } }).then((r) => setF({ ...f, markup_pct: m, price: r.price })).catch(() => {}) }
 
   async function save(confirmBelowCost = false) {
+    if (saving) return
     setErrs(null)
     if (!f.name.trim()) { setTab('datos'); setErrs('Escribí el nombre del producto.'); toast('Falta el nombre del producto', true); return }
     if (f.kind === 'product' && !(Number(f.price) > 0)) { setTab('datos'); setErrs('Cargá el precio de venta: está en esta pestaña, al lado del nombre.'); toast('Falta el precio de venta', true); return }
@@ -64,6 +66,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
     for (const k of ['id', 'images', 'suppliers', 'available', 'sell_price', 'on_offer', 'offer_label_now', 'online_price', 'online_on_offer', 'price_net', 'price_vat', 'markup', 'margin', 'stock_value', 'low', 'out', 'stock', 'reserved', 'created_at', 'updated_at', 'image_url', 'image_count', 'low_alert_active']) delete body[k]
     if (id) delete body.initial_stock
     if (!canCost) for (const k of ['cost', 'cost_includes_vat', 'markup_pct']) delete body[k]
+    setSaving(true)
     try {
       let failed = 0
       if (id) await api('/products/' + id, { method: 'PUT', body })
@@ -75,7 +78,7 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
       onSaved()
     } catch (e: any) {
       if (/por debajo del costo/.test(e.message) && /Confirmá/.test(e.message)) setNeedConfirm(true); else setErrs(e.message)
-    }
+    } finally { setSaving(false) }
   }
   async function addImage(file: File | null, fromUrl?: string) {
     if (!id) { toast('Guardá el producto primero para agregarle imágenes', true); return }
@@ -97,10 +100,10 @@ function ProductForm({ id, onClose, onSaved, canCost, canPrice }: { id: number |
   const catList = facets.data?.categories ?? []
 
   return (
-    <Modal title={id ? `Editar: ${f.name || 'producto'}` : 'Nuevo producto'} onClose={onClose} wide="xl" footer={<><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => save(false)}>Guardar</button></>}>
+    <Modal title={id ? `Editar: ${f.name || 'producto'}` : 'Nuevo producto'} onClose={onClose} wide="xl" footer={<><button onClick={onClose}>Cancelar</button><button className="primary" disabled={saving} onClick={() => save(false)}>{saving ? 'Guardando…' : 'Guardar'}</button></>}>
       <Tabs value={tab} onChange={setTab} tabs={[['datos', 'Datos'], ['precios', 'Precios e IVA'], ['oferta', 'Oferta'], ['imagenes', 'Imágenes', (id ? imgs.length : pending.length) || undefined], ['proveedores', 'Proveedores'], ...(id ? [['historial', 'Historial'] as ['historial', string]] : [])]} />
       {errs && <div className="errbox">{errs}</div>}
-      {needConfirm && <div className="warnbox">El precio (o la oferta) queda <b>por debajo del costo</b>. <button className="small" onClick={() => { setNeedConfirm(false); save(true) }}>Guardar igual</button></div>}
+      {needConfirm && <div className="warnbox">El precio (o la oferta) queda <b>por debajo del costo</b>. <button className="small" disabled={saving} onClick={() => { setNeedConfirm(false); save(true) }}>Guardar igual</button></div>}
 
       {tab === 'datos' && <div className="fsecs">
         <section className="fsec">
