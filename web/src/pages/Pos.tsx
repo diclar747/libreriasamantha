@@ -329,19 +329,25 @@ export default function Pos() {
         <div className="warnbox">{auth.message}</div><p className="muted">Un responsable (administrador) ingresa su usuario y contraseña. Queda registrado quién autorizó y por qué.</p>
         <div className="form"><Field label="Usuario del responsable"><input autoFocus value={auth.username} onChange={(e) => setAuth({ ...auth, username: e.target.value })} /></Field><Field label="Contraseña"><input type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} /></Field>
           <Field label="Motivo" span={2}><input value={saleReason} onChange={(e) => setSaleReason(e.target.value)} placeholder="Motivo del descuento" /></Field></div></Modal>}
-      {review && <Modal title="Confirmá la venta" wide onClose={() => setReview(false)} footer={<><button onClick={() => setReview(false)}>Volver</button><button className="primary" disabled={busy || !canCharge} onClick={charge}>{busy ? 'Procesando…' : 'Confirmar y cobrar'}</button></>}>
-        <div className="table-wrap"><table><thead><tr><th>Producto</th><th className="num">Cant.</th><th className="num">Precio</th><th className="num">Desc.</th><th className="num">Total</th></tr></thead>
-          <tbody>{cart.map((l) => <tr key={l.id}><td>{l.name}</td><td className="num">{l.qty}</td><td className="num">{gs(l.price)}</td><td className="num">{l.discount ? '− ' + gs(l.discount) : '—'}</td><td className="num">{gs(l.price * l.qty - l.discount)}</td></tr>)}</tbody></table></div>
-        <dl className="dl" style={{ marginTop: 12 }}>
-          {globalDisc > 0 && <div><dt>Descuento general</dt><dd>− {gs(globalDisc)}</dd></div>}
-          {wo && Number(wo.deposit) > 0 && <div><dt>Anticipo ya cobrado</dt><dd>− {gs(wo.deposit)}</dd></div>}
-          <div><dt>Total a cobrar</dt><dd><b>{gs(due)}</b></dd></div>
-          {METHODS.filter(({ key }) => key in pays && Number(pays[key]) > 0).map(({ key, label }) => <div key={key}><dt>{label} recibido</dt><dd>{gs(Number(pays[key]))}</dd></div>)}
-          {change > 0 && <div><dt>Vuelto en efectivo</dt><dd><b>{gs(change)}</b></dd></div>}
-          {onCredit && creditAmount > 0 && <div><dt>A crédito{selectedCustomer ? ' · ' + selectedCustomer.name : ''}</dt><dd><b>{gs(creditAmount)}</b></dd></div>}
-          <div><dt>Cliente</dt><dd>{selectedCustomer?.name ?? 'Consumidor final'}</dd></div>
-        </dl>
-        <p className="muted">Revisá los datos: al confirmar se registra la venta y se descuenta el stock.</p></Modal>}
+      {review && <Modal title="Confirmá la venta" onClose={() => setReview(false)} footer={<><button onClick={() => setReview(false)}>Volver</button><button className="primary" disabled={busy || !canCharge} onClick={charge}>{busy ? 'Procesando…' : 'Confirmar y cobrar'}</button></>}>
+        <div className="pos-review">
+          <div className="pos-review-items">
+            {cart.map((l) => <div className="pos-review-item" key={l.id}>
+              <div className="pos-review-name"><b>{l.name}</b><small>{l.qty} × {gs(l.price)}{l.discount ? ` · desc. −${gs(l.discount)}` : ''}</small></div>
+              <b className="pos-review-line">{gs(l.price * l.qty - l.discount)}</b>
+            </div>)}
+          </div>
+          <div className="pos-review-sum">
+            {globalDisc > 0 && <div><span>Descuento general</span><b>− {gs(globalDisc)}</b></div>}
+            {wo && Number(wo.deposit) > 0 && <div><span>Anticipo ya cobrado</span><b>− {gs(wo.deposit)}</b></div>}
+            <div className="pos-review-total"><span>Total a cobrar</span><b>{gs(due)}</b></div>
+            {METHODS.filter(({ key }) => key in pays && Number(pays[key]) > 0).map(({ key, label }) => <div key={key}><span>{label} recibido</span><b>{gs(Number(pays[key]))}</b></div>)}
+            {change > 0 && <div><span>Vuelto en efectivo</span><b>{gs(change)}</b></div>}
+            {onCredit && creditAmount > 0 && <div><span>A crédito{selectedCustomer ? ' · ' + selectedCustomer.name : ''}</span><b>{gs(creditAmount)}</b></div>}
+            <div><span>Cliente</span><b>{selectedCustomer?.name ?? 'Consumidor final'}</b></div>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>Revisá los datos: al confirmar se registra la venta y se descuenta el stock.</p>
+        </div></Modal>}
       {confirmCancel && <div className="pos-dialog-backdrop"><div className="pos-dialog card" role="dialog" aria-modal="true" aria-labelledby="pos-cancel-title"><span className="pos-dialog-icon"><Icon name="trash" size={23} /></span><h2 id="pos-cancel-title">¿Cancelar esta venta?</h2><p>Se quitarán los {units} {units === 1 ? 'producto' : 'productos'} del carrito y los importes cargados. La venta todavía no fue registrada.</p><div><button ref={cancelBack} onClick={() => { setConfirmCancel(false); cancelTrigger.current?.focus() }}>Seguir vendiendo</button><button className="danger" onClick={() => { reset(); toast('Venta actual cancelada') }}>Sí, cancelar venta</button></div></div></div>}
       {cart.length > 0 && <a href="#cart" className="pos-bar"><span>{units} {units === 1 ? 'artículo' : 'artículos'}</span><b>{gs(total)}</b><span>Ver carrito ›</span></a>}
     </>

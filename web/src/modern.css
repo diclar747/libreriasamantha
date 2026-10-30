@@ -220,6 +220,22 @@ tbody tr:hover { background: color-mix(in srgb, var(--brand) 3%, var(--surface))
 .pos-page-head .muted { margin: 5px 0 0; font-size: 13px; }
 .pos-last { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
 .pos-last-mobile { display: none; } /* en escritorio la última venta se muestra en la cabecera */
+
+/* Confirmación de la venta: diseño propio, se ve bien en teléfono y escritorio sin tabla */
+.pos-review { display: grid; gap: 14px; }
+.pos-review-items { display: grid; }
+.pos-review-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.pos-review-item:last-child { border-bottom: 0; }
+.pos-review-name { display: grid; gap: 2px; min-width: 0; }
+.pos-review-name b { line-height: 1.25; word-break: break-word; }
+.pos-review-name small { color: var(--muted); font-size: 12px; }
+.pos-review-line { white-space: nowrap; }
+.pos-review-sum { display: grid; gap: 8px; background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.pos-review-sum > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pos-review-sum > div > span { color: var(--muted); }
+.pos-review-sum > div > b { white-space: nowrap; }
+.pos-review-total { font-size: 16px; }
+.pos-review-total > b { font-size: 20px; color: var(--brand-text); }
 .pos-last a { color: var(--brand-text); font-size: 12px; font-weight: 700; }
 .pos-kicker { display: block; color: var(--brand-text); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
 .pos-modern { grid-template-columns: minmax(0, 1fr) minmax(370px, 430px); gap: 20px; }
