@@ -32,6 +32,8 @@ const P: Record<string, string> = {
   credit: 'M4 4h16v16H4zM8 9h8M8 13h5M8 17h4',
   pause: 'M6 4h4v16H6zM14 4h4v16h-4z',
   tick: 'M4 12l5 5L20 6',
+  expand: 'M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3',
+  shrink: 'M8 3v3a2 2 0 01-2 2H3M21 8h-3a2 2 0 01-2-2V3M3 16h3a2 2 0 012 2v3M16 21v-3a2 2 0 012-2h3',
 }
 
 export type IconName = keyof typeof P

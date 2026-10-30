@@ -145,6 +145,21 @@ function useResponsiveTables() {
   }, [pathname])
 }
 
+// Botón de pantalla completa: agranda la app a toda la pantalla y vuelve a lo normal.
+function FullscreenButton() {
+  const [fs, setFs] = useState(typeof document !== 'undefined' && !!document.fullscreenElement)
+  useEffect(() => {
+    const on = () => setFs(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', on)
+    return () => document.removeEventListener('fullscreenchange', on)
+  }, [])
+  const toggle = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.()
+    else document.documentElement.requestFullscreen?.().catch(() => {})
+  }
+  return <button className="icon-btn" onClick={toggle} aria-label={fs ? 'Salir de pantalla completa' : 'Pantalla completa'} title={fs ? 'Salir de pantalla completa' : 'Pantalla completa'}><Icon name={fs ? 'shrink' : 'expand'} /></button>
+}
+
 function Shell() {
   const { user, logout } = useApp()
   const online = useOnline()
@@ -192,6 +207,7 @@ function Shell() {
       <header className="topbar">
         <div className="logo" style={{ padding: 0 }}><LogoMark size={34} /></div>
         <h1>{current?.[1] ?? 'Samantha'}</h1>
+        <FullscreenButton />
         <ThemePicker />
         {install.canInstall && <button className="icon-btn" onClick={install.prompt} aria-label="Instalar app"><Icon name="download" /></button>}
         <Bell />
