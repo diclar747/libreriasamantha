@@ -340,6 +340,17 @@ tbody tr:hover { background: color-mix(in srgb, var(--brand) 3%, var(--surface))
 .pos-dialog > div button { flex: 1; }
 
 @media (max-width: 950px) { .pos-modern { grid-template-columns: 1fr; } }
+
+/* Escritorio/tablet ancho: SOLO la grilla de productos hace scroll; el carrito y el buscador quedan fijos.
+   Cada columna se acota a la altura de la pantalla (desde donde arranca el POS) y desplaza su contenido por dentro. */
+@media (min-width: 951px) {
+  .main:has(.pos-modern) { max-height: calc(100dvh - 71px); overflow: hidden; }
+  .pos-modern { align-items: start; }
+  .pos-left { min-height: 0; display: flex; flex-direction: column; }
+  .pos-catalog { max-height: calc(100dvh - 232px); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .pos-results { flex: 1; min-height: 0; overflow-y: auto; margin-right: -10px; padding-right: 10px; scrollbar-width: thin; }
+  .pos-cart { position: sticky; top: 90px; max-height: calc(100dvh - 232px); overflow-y: auto; scrollbar-width: thin; }
+}
 @media (max-width: 719px) {
   .pos-page-head { display: block; }
   .pos-page-head h1 { font-size: 28px; }
