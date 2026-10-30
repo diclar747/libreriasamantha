@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, gs, paymentMethodLabel, useApp } from '../api'
+import { api, gs, openKude, paymentMethodLabel, useApp } from '../api'
 import { EmptyRow, Field, fmtDateTime, Modal, Pager, qs, Status, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
@@ -35,6 +35,13 @@ function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void
         {!!s.installments?.length && <><h3>Cuotas</h3><table><tbody>{s.installments.map((i: any) => <tr key={i.id}><td>Cuota {i.number}</td><td>{new Date(i.due_date).toLocaleDateString('es-PY')}</td><td className="num">{gs(i.amount)}</td><td><Status value={i.status} label={i.status === 'open' ? 'Pendiente' : 'Pagada'} /></td></tr>)}</tbody></table></>}
         {!!s.returns?.length && <><h3>Devoluciones</h3><table><tbody>{s.returns.map((r: any) => <tr key={r.id}><td>{fmtDateTime(r.created_at)}</td><td>{r.reason}</td><td>{r.user_name}</td><td className="num">{gs(r.total)}</td></tr>)}</tbody></table></>}
         {s.status === 'void' && <p className="muted">Motivo de anulación: {s.void_reason}</p>}
+        {!!s.invoices?.length && <div className="no-print"><h3>Facturación electrónica</h3>
+          {s.invoices.map((i: any) => <div key={i.id} className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <span>{i.kind === 'invoice' ? 'Factura' : 'Nota de crédito'} <b>{i.provider_number ? `N.º ${i.provider_number}` : i.number}</b> <span className={'pill ' + (i.status === 'approved' ? 'ok' : i.status === 'rejected' ? 'bad' : 'warn')}>{i.status === 'approved' ? 'Aprobada' : i.status === 'rejected' ? 'Rechazada' : 'Pendiente'}</span>{i.error && <div className="muted">{i.error}</div>}</span>
+            {i.cdc && <button className="small" onClick={() => openKude(i.id).catch((e) => toast(e.message, true))}>Comprobante</button>}
+          </div>)}
+          {s.status === 'void' && s.invoices.some((i: any) => i.kind === 'credit_note') && <p className="muted" style={{ marginTop: 8 }}>La factura se anuló con una nota de crédito electrónica; el monto se descontó del movimiento de ventas.</p>}
+        </div>}
       </div>
       {ret && <Modal title="Devolución de mercadería" onClose={() => setRet(null)} wide footer={<><button onClick={() => setRet(null)}>Cancelar</button><button className="primary" disabled={ret.reason.length < 3 || !Object.values(ret.qty).some((n) => Number(n) > 0)} onClick={doReturn}>Registrar devolución</button></>}>
         <table><thead><tr><th>Producto</th><th className="num">Vendido</th><th className="num">Ya devuelto</th><th className="num">Devolver</th></tr></thead>

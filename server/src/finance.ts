@@ -62,8 +62,10 @@ export const MOVEMENTS_SQL = `
   WHERE p.kind = 'customer_payment' AND p.method <> 'advance'
   UNION ALL
   SELECT 'pay:' || p.id, p.at, CASE WHEN p.kind = 'return' THEN 'sale_return' ELSE 'refund' END, 'out', p.amount::bigint,
-    CASE WHEN p.kind = 'return' THEN 'Devolución de venta ' || s.number ELSE 'Reembolso por anulación de ' || s.number END,
-    'Devoluciones y reembolsos', p.method::text,
+    CASE WHEN p.kind = 'return' THEN 'Devolución de venta ' || s.number
+         WHEN EXISTS (SELECT 1 FROM invoices i WHERE i.sale_id = s.id AND i.kind = 'invoice') THEN 'Anulación de factura ' || s.number
+         ELSE 'Anulación de venta ' || s.number END,
+    'Devoluciones y anulaciones', p.method::text,
     (${payAcct})::int, (${payDelta})::bigint, p.session_id,
     'customer', s.customer_id, c.name::text, COALESCE(p.user_id, s.voided_by, s.user_id), 'sale', s.id, s.number::text, p.reference::text, NULL::text,
     p.settlement_status::text, p.fee::bigint, false

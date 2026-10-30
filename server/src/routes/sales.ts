@@ -396,7 +396,9 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
     const { rows: installments } = await db.query('SELECT * FROM installments WHERE sale_id = $1 ORDER BY number', [id])
     const { rows: returns } = await db.query(
       `SELECT r.*, u.name AS user_name FROM sale_returns r JOIN users u ON u.id = r.user_id WHERE r.sale_id = $1 ORDER BY r.id`, [id])
-    return { ...rows[0], items, payments, installments, returns }
+    const { rows: invoices } = await db.query(
+      'SELECT id, kind, number, provider_number, status, cdc, error FROM invoices WHERE sale_id = $1 ORDER BY id', [id])
+    return { ...rows[0], items, payments, installments, returns, invoices }
   })
 
   // Anulación: repone stock, devuelve el dinero cobrado y revierte el crédito. Requiere motivo.
