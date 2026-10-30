@@ -364,8 +364,9 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
       throw e
     }
     const { sale, invoiceId } = created
-    if (invoiceId) await submitInvoice(db, invoiceId)
-    return reply.code(201).send(sale)
+    let invoice = null
+    if (invoiceId) { await submitInvoice(db, invoiceId); invoice = (await db.query('SELECT id, kind, number, provider_number, status, cdc, error FROM invoices WHERE id = $1', [invoiceId])).rows[0] ?? null }
+    return reply.code(201).send({ ...sale, invoice })
   })
 
   app.get('/sales', async (req) => {

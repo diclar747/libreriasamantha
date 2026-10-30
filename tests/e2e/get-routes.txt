@@ -30,6 +30,7 @@
 /customers
 /customers/:id/portal
 /customers/:id/statement
+/customers/lookup
 /delivery-zones
 /delivery/cities
 /delivery/history
@@ -45,7 +46,9 @@
 /info
 /inventory-counts
 /inventory-counts/:id
+/invoice/status
 /invoices
+/invoices/:id/kude
 /me
 /me/profile
 /money-accounts

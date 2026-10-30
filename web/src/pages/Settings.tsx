@@ -12,6 +12,13 @@ export default function Settings() {
   const [ai, setAi] = useState<any>(null)
   const [aiKey, setAiKey] = useState('')
   const [check, setCheck] = useState<string>('')
+  const [invStatus, setInvStatus] = useState<any>(null)
+  const [invKey, setInvKey] = useState('')
+  const [invCheck, setInvCheck] = useState('')
+  const loadInvStatus = () => api('/invoice/status').then(setInvStatus).catch(() => {})
+  const saveInvKey = async () => { try { await api('/invoice/api-key', { method: 'PUT', body: { apiKey: invKey } }); setInvKey(''); toast('Clave de facturación guardada (cifrada)'); loadInvStatus() } catch (e: any) { toast(e.message, true) } }
+  const removeInvKey = async () => { if (!confirm('¿Quitar la clave de la API de facturación?')) return; await api('/invoice/api-key', { method: 'DELETE' }).catch((e) => toast(e.message, true)); loadInvStatus() }
+  const testInvoice = async () => { setInvCheck('Probando…'); try { const r = await api('/invoice/test', { method: 'POST' }); setInvCheck(r.message) } catch (e: any) { setInvCheck(''); toast(e.message, true) } }
   const setProvider = async (provider: string) => { try { await api('/settings/ai', { method: 'PUT', body: { provider } }); setCheck(''); loadAi() } catch (e: any) { toast(e.message, true) } }
   const testNiro = async () => { setCheck('Probando…'); try { const r = await api('/ai/models'); const n = (r.models ?? []).filter((m: any) => m.category === 'CHAT').length; setCheck(`Conexión correcta: ${n} modelos de chat disponibles en Niro.`) } catch (e: any) { setCheck(''); toast(e.message, true) } }
   const loadAi = () => api('/ai/status').then(setAi).catch(() => {})
@@ -22,7 +29,7 @@ export default function Settings() {
   useEffect(() => {
     api('/settings/shop').then(setShop).catch((e) => toast(e.message, true))
     api('/settings/invoice').then(setInvoice).catch(() => {})
-    loadZones(); loadAi()
+    loadZones(); loadAi(); loadInvStatus()
   }, [])
   const save = async (key: string, v: any) => { try { await api('/settings/' + key, { method: 'PUT', body: v }); toast('Guardado') } catch (e: any) { toast(e.message, true) } }
   if (!shop || !invoice) return <p className="muted">Cargando…</p>
@@ -45,12 +52,31 @@ export default function Settings() {
         </div>
         <div className="card" style={{ display: 'grid', gap: 10 }}>
           <h2>Facturación electrónica</h2>
-          <label>Establecimiento<input value={invoice.establishment} onChange={i('establishment')} /></label>
-          <label>Punto de expedición<input value={invoice.point} onChange={i('point')} /></label>
-          <label>Timbrado<input value={invoice.stamp} onChange={i('stamp')} /></label>
-          <label>Modo<select value={invoice.mode} onChange={i('mode')}><option value="mock">Simulado (pruebas)</option><option value="sifen">SIFEN (requiere habilitación)</option></select></label>
-          <label className="row" style={{ flexDirection: 'row' }}><input type="checkbox" style={{ width: 'auto' }} checked={invoice.enabled} onChange={(e) => setInvoice({ ...invoice, enabled: e.target.checked })} /> Emitir factura en cada venta</label>
+          <label>Modo<select value={invoice.mode ?? 'mock'} onChange={i('mode')}>
+            <option value="mock">Simulado (pruebas internas)</option>
+            <option value="oietema">OñeTema (electrónica real)</option>
+          </select></label>
+          <div className="grid cols-2" style={{ gap: 10 }}>
+            <label>Establecimiento<input value={invoice.establishment ?? ''} onChange={i('establishment')} placeholder="001" /></label>
+            <label>Punto de expedición<input value={invoice.point ?? ''} onChange={i('point')} placeholder="001" /></label>
+          </div>
+          {invoice.mode === 'oietema' && <>
+            <label>Tenant (OñeTema)<input value={invoice.tenant ?? ''} onChange={i('tenant')} placeholder="paolaramona" /></label>
+            <label>Formato del comprobante<select value={invoice.format ?? 'A4'} onChange={i('format')}><option value="A4">Hoja A4</option><option value="TICKET">Ticket 80mm</option></select></label>
+          </>}
+          <label>Timbrado (referencia)<input value={invoice.stamp ?? ''} onChange={i('stamp')} /></label>
+          <label className="row" style={{ flexDirection: 'row' }}><input type="checkbox" style={{ width: 'auto' }} checked={!!invoice.enabled} onChange={(e) => setInvoice({ ...invoice, enabled: e.target.checked })} /> Emitir factura en cada venta</label>
           <button className="primary" onClick={() => save('invoice', invoice)}>Guardar</button>
+          {invoice.mode === 'oietema' && invStatus && <>
+            <hr style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)' }} />
+            <p style={{ margin: 0 }}>Clave de la API: {invStatus.apiKeyPresent ? <span className="pill ok">Cargada · termina en {invStatus.last4}</span> : <span className="pill bad">Sin clave</span>}</p>
+            <label>{invStatus.apiKeyPresent ? 'Reemplazar la clave' : 'Pegá la clave de la API de OñeTema'}<input type="password" value={invKey} onChange={(e) => setInvKey(e.target.value)} autoComplete="off" placeholder="API key" /></label>
+            <div className="row"><button className="primary" onClick={saveInvKey} disabled={invKey.trim().length < 8}>Guardar clave</button>
+              {invStatus.apiKeyPresent && <button className="danger" onClick={removeInvKey}>Quitar</button>}
+              <button onClick={testInvoice}>Probar conexión</button></div>
+            {invCheck && <p className="callout" style={{ margin: 0 }}>{invCheck}</p>}
+            <p className="muted" style={{ margin: 0 }}>La clave se guarda cifrada. En modo <b>OñeTema</b> cada venta emite la factura electrónica real contra SET.</p>
+          </>}
         </div>
         <div className="card" style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
           <h2>Asistente con IA — conexión</h2>

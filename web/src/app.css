@@ -177,6 +177,8 @@ th input[type="checkbox"], td input[type="checkbox"] { display: block; }
 
   /* Punto de venta: catálogo arriba, cobro abajo, total siempre visible */
   .pos-page-head { display: none; }
+  .pos-last-mobile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .pos-last-mobile button { font-size: 14px; }
   .pos-modern { gap: 14px; }
   .pos-catalog { padding: 14px; }
   .pos-section-heading h2 { font-size: 18px; }

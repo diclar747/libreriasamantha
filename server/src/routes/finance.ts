@@ -6,6 +6,8 @@ import { ACC, methodAccount, post } from '../accounting.js'
 import { applyCustomerPayment } from '../credit.js'
 import { METHOD_LABEL } from '../finance.js'
 import { insertPayment, normalizePayment } from './sales.js'
+import { consultarRuc } from '../oietema.js'
+import { baseRuc, withDv } from '../ruc.js'
 
 const paymentMethodLabel = (m: string) => METHOD_LABEL[m] ?? m
 
@@ -16,6 +18,10 @@ const customer = z.object({
   email: z.string().nullish(),
   address: z.string().nullish(),
   credit_limit: z.number().int().min(0).default(0),
+  document: z.string().nullish(),
+  doc_type: z.enum(['ruc', 'ci']).nullish(),
+  taxpayer: z.boolean().nullish(),
+  persona: z.enum(['FISICA', 'JURIDICA']).nullish(),
 })
 
 export function financeRoutes(app: FastifyInstance, db: Db) {
@@ -32,9 +38,29 @@ export function financeRoutes(app: FastifyInstance, db: Db) {
     requirePerm(req, 'customers.write')
     const b = customer.parse(req.body)
     const { rows } = await db.query(
-      'INSERT INTO customers (name, ruc, phone, email, address, credit_limit) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [b.name, b.ruc, b.phone, b.email, b.address, b.credit_limit])
+      'INSERT INTO customers (name, ruc, phone, email, address, credit_limit, document, doc_type, taxpayer, persona) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [b.name, b.ruc, b.phone, b.email, b.address, b.credit_limit, b.document ?? b.ruc ?? null, b.doc_type ?? null, b.taxpayer ?? null, b.persona ?? null])
     return reply.code(201).send(rows[0])
+  })
+
+  // Consulta de documento para facturar: primero la base local (por RUC/documento, ignorando el dígito verificador);
+  // si no está, consulta a SET (endpoint público de OñeTema) y devuelve la razón social para crear/enriquecer el cliente.
+  app.get('/customers/lookup', async (req) => {
+    requirePerm(req, 'customers.read')
+    const doc = String((req.query as any).doc ?? '').trim()
+    const num = baseRuc(doc)
+    if (!num) throw new HttpError(400, 'Ingresá un RUC o cédula.')
+    // Coincide si los dígitos guardados son el número base (sin DV) o el base + un dígito (el DV). $1 = base, $2 = base + '_'.
+    const { rows: local } = await db.query(
+      `SELECT * FROM customers WHERE active AND (
+         regexp_replace(COALESCE(ruc,''), '\\D', '', 'g') IN ($1) OR regexp_replace(COALESCE(ruc,''), '\\D', '', 'g') LIKE $2
+         OR regexp_replace(COALESCE(document,''), '\\D', '', 'g') IN ($1) OR regexp_replace(COALESCE(document,''), '\\D', '', 'g') LIKE $2)
+       ORDER BY id LIMIT 1`,
+      [num, num + '_'])
+    if (local[0]) return { source: 'local', customer: local[0] }
+    const set = await consultarRuc(doc)
+    if (set.exists) return { source: 'set', taxpayer: { razonSocial: set.razonSocial, ruc: set.rucConDv || withDv(num), estado: set.estado, taxpayer: true } }
+    return { source: 'none', doc: num }
   })
   app.put('/customers/:id', async (req) => {
     requirePerm(req, 'customers.write')

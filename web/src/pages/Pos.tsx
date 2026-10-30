@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, gs, useApp } from '../api'
+import { api, gs, openKude, useApp } from '../api'
 import { Icon, type IconName } from '../components/Icons'
 import QRCode from 'qrcode'
 import { Scanner, useKeyboardScanner } from '../components/Scanner'
@@ -24,6 +24,10 @@ export default function Pos() {
   const [pays, setPays] = useState<Record<string, string>>({})
   const [customers, setCustomers] = useState<any[]>([])
   const [customerId, setCustomerId] = useState('')
+  const [docLookup, setDocLookup] = useState('')
+  const [docResult, setDocResult] = useState<any>(null) // {source:'set'|'none', ...}
+  const [docName, setDocName] = useState('')
+  const [docBusy, setDocBusy] = useState(false)
   const [onCredit, setOnCredit] = useState(false)
   const [cashOpen, setCashOpen] = useState<boolean | null>(null)
   const [last, setLast] = useState<any>(null)
@@ -148,7 +152,7 @@ export default function Pos() {
     const [svc] = await api('/products?q=IMP-SERV')
     setWo(w); setCart([{ id: svc.id, name: `${w.number} · ${w.description}`, price: Number(w.price), qty: 1, discount: 0, available: 1, service: true }])
   }
-  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); setReview(false); saleKey.current = uid(); input.current?.focus() }
+  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); setReview(false); setDocLookup(''); setDocResult(null); setDocName(''); saleKey.current = uid(); input.current?.focus() }
 
   async function charge() {
     if (!canCharge) return
@@ -190,15 +194,40 @@ export default function Pos() {
     if (wo && cart.some((line) => line.id === id)) { reset(); return }
     setCart((current) => current.filter((line) => line.id !== id))
   }
+  // Documento del cliente para facturar: busca primero local, si no está consulta a SET y permite crear/enriquecer.
+  const pickCustomer = (c: any) => { setCustomers((list) => (list.some((x) => x.id === c.id) ? list : [c, ...list])); setCustomerId(String(c.id)); setDocResult(null); setDocLookup(''); setDocName('') }
+  async function lookupDoc() {
+    const doc = docLookup.trim()
+    if (doc.replace(/\D/g, '').length < 5) { toast('Ingresá un RUC o cédula válido', true); return }
+    setDocBusy(true); setDocResult(null)
+    try {
+      const r = await api('/customers/lookup?doc=' + encodeURIComponent(doc))
+      if (r.source === 'local') { pickCustomer(r.customer); toast('Cliente: ' + r.customer.name) }
+      else if (r.source === 'set') { setDocResult(r); setDocName(r.taxpayer.razonSocial) }
+      else { setDocResult(r); setDocName('') }
+    } catch (e: any) { toast(e.message, true) } finally { setDocBusy(false) }
+  }
+  async function createFromLookup() {
+    try {
+      const digits = docLookup.replace(/\D/g, '')
+      const body = docResult.source === 'set'
+        ? { name: docName.trim(), ruc: docResult.taxpayer.ruc, document: docResult.taxpayer.ruc, doc_type: 'ruc', taxpayer: true, persona: docName.includes(',') ? 'FISICA' : 'JURIDICA' }
+        : { name: docName.trim(), ruc: digits, document: digits, doc_type: 'ci', taxpayer: false, persona: 'FISICA' }
+      if (body.name.length < 2) { toast('Escribí el nombre del cliente', true); return }
+      const c = await api('/customers', { body })
+      pickCustomer(c); toast('Cliente agregado para la factura')
+    } catch (e: any) { toast(e.message, true) }
+  }
 
   const units = cart.reduce((s, l) => s + l.qty, 0)
   if (cashOpen === false) return <div className="card"><h1>Caja cerrada</h1><p className="muted">Abrí la caja en la sección <b>Caja</b> para empezar a vender.</p></div>
 
   return (
     <>
-      <div className="head pos-page-head"><div><span className="pos-kicker">CAJA Y VENTAS</span><h1>Punto de venta</h1><p className="muted">Agregá productos, elegí cómo pagar y confirmá la venta.</p></div>{last && <div className="pos-last"><span className="pill ok">Última venta {last.number} · {gs(last.total)}{last.change_given > 0 && ` · vuelto ${gs(last.change_given)}`}</span><Link to="/sales">{['owner', 'admin'].includes(user?.role ?? '') ? 'Ver o anular venta' : 'Ver venta'}</Link></div>}</div>
+      <div className="head pos-page-head"><div><span className="pos-kicker">CAJA Y VENTAS</span><h1>Punto de venta</h1><p className="muted">Agregá productos, elegí cómo pagar y confirmá la venta.</p></div>{last && <div className="pos-last"><span className="pill ok">Última venta {last.number} · {gs(last.total)}{last.change_given > 0 && ` · vuelto ${gs(last.change_given)}`}</span>{last.invoice?.cdc && <button className="small" onClick={() => openKude(last.invoice.id).catch((e) => toast(e.message, true))}>🖨 Imprimir factura</button>}{last.invoice && last.invoice.status !== 'approved' && <span className="pill warn" title={last.invoice.error || ''}>factura pendiente</span>}<Link to="/sales">{['owner', 'admin'].includes(user?.role ?? '') ? 'Ver o anular venta' : 'Ver venta'}</Link></div>}</div>
       <div className="pos pos-modern">
         <div className="pos-left">
+          {last && <div className="pos-last-mobile">{last.invoice?.cdc ? <button className="primary small" onClick={() => openKude(last.invoice.id).catch((e) => toast(e.message, true))}>🖨 Imprimir factura {last.number}</button> : <span className="pill ok">Venta {last.number} registrada</span>}{last.invoice && last.invoice.status !== 'approved' && <span className="pill warn" title={last.invoice.error || ''}>factura pendiente</span>}</div>}
           <section className="card pos-catalog" aria-label="Catálogo de productos">
             <div className="pos-section-heading"><div><span className="pos-kicker">SELECCIONÁ PRODUCTOS</span><h2>Catálogo</h2></div><span className="pos-catalog-count">{results.length} disponibles para elegir</span></div>
             <div className="pos-search"><Icon name="search" size={19} /><input ref={input} autoFocus aria-label="Buscar productos" placeholder="Buscar por nombre, código o escanear código de barras…" value={q}
@@ -248,7 +277,23 @@ export default function Pos() {
           {wo && Number(wo.deposit) > 0 && <div className="pos-deposit"><span>Anticipo ya cobrado</span><b>− {gs(wo.deposit)}</b><span>Saldo pendiente</span><b>{gs(due)}</b></div>}
           <div className="pos-payment">
             <div className="pos-payment-heading"><div><span className="pos-kicker">COBRO</span><h3>Forma de pago</h3></div><span>Podés combinar medios</span></div>
-            <label className="pos-customer">Cliente<select value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Consumidor final</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+            <label className="pos-customer">Cliente<select value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Consumidor final</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.ruc ? ` · ${c.ruc}` : ''}</option>)}</select></label>
+            <div className="pos-doc">
+              <div className="row" style={{ gap: 6 }}>
+                <input style={{ flex: 1 }} value={docLookup} onChange={(e) => { setDocLookup(e.target.value); setDocResult(null) }} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), lookupDoc())} placeholder="RUC o cédula para facturar" inputMode="numeric" aria-label="RUC o cédula" />
+                <button type="button" onClick={lookupDoc} disabled={docBusy || !docLookup.trim()}>{docBusy ? '…' : 'Buscar'}</button>
+              </div>
+              {docResult?.source === 'set' && <div className="okbox" style={{ padding: 8 }}>
+                <b>Encontrado en SET:</b> {docResult.taxpayer.ruc}
+                <input style={{ width: '100%', marginTop: 6 }} value={docName} onChange={(e) => setDocName(e.target.value)} aria-label="Razón social" />
+                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup}>Usar para la factura</button><button type="button" className="small" onClick={() => setDocResult(null)}>Cancelar</button></div>
+              </div>}
+              {docResult?.source === 'none' && <div className="warnbox" style={{ padding: 8 }}>
+                Ese documento no está en SET (cédula de no contribuyente). Escribí el nombre:
+                <input style={{ width: '100%', marginTop: 6 }} value={docName} onChange={(e) => setDocName(e.target.value)} placeholder="Nombre y apellido" aria-label="Nombre del cliente" />
+                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup} disabled={docName.trim().length < 2}>Agregar y usar</button><button type="button" className="small" onClick={() => setDocResult(null)}>Cancelar</button></div>
+              </div>}
+            </div>
             <div className="pos-pay-label">Pago al contado</div>
             <div className="pos-methods">{METHODS.map(({ key, label, icon, detail }) => <button key={key} type="button" className={'pos-method' + (key in pays ? ' selected' : '')} aria-pressed={key in pays} onClick={() => togglePayment(key)} disabled={!cart.length}><Icon name={icon} size={21} /><span><b>{label}</b><small>{detail}</small></span></button>)}</div>
             {METHODS.filter(({ key }) => key in pays).map(({ key, label, icon }) => <label className="pos-pay-input" key={key}><span><Icon name={icon} size={17} /> {label}</span><div><small>Gs.</small><NumInput min={0} step={1} inputMode="numeric" aria-label={`Monto en ${label.toLowerCase()}`} value={pays[key]} onChange={(e) => setPaymentAmount(key, e.target.value)} /></div></label>)}

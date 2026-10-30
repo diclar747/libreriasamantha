@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, gs, useApp } from '../api'
+import { api, gs, openKude, useApp } from '../api'
 
 type Tab = 'repl' | 'outbox' | 'invoices'
 
@@ -57,15 +57,15 @@ export default function Automation() {
       )}
       {rows && tab === 'invoices' && (
         <div className="card">
-          <p className="muted">Modo simulado: la emisión real con SIFEN requiere timbrado, certificado y habilitación en la DNIT.</p>
-          <table><thead><tr><th>Tipo</th><th>Número</th><th>Cliente</th><th className="num">Total</th><th className="num">IVA 10%</th><th>Estado</th><th /></tr></thead><tbody>
+          <table><thead><tr><th>Tipo</th><th>Número</th><th>Cliente</th><th className="num">Total</th><th className="num">IVA 10%</th><th>Estado</th><th>CDC</th><th /></tr></thead><tbody>
             {rows.map((i) => (
-              <tr key={i.id}><td>{i.kind === 'invoice' ? 'Factura' : 'Nota de crédito'}</td><td><b>{i.number}</b></td><td>{i.customer_name}<div className="muted">{i.customer_ruc}</div></td>
+              <tr key={i.id}><td>{i.kind === 'invoice' ? 'Factura' : 'Nota de crédito'}</td><td><b>{i.number}</b>{i.provider_number && <div className="muted">N.º {i.provider_number}</div>}</td><td>{i.customer_name}<div className="muted">{i.customer_ruc}</div></td>
                 <td className="num">{gs(i.total)}</td><td className="num">{gs(Math.round(i.tax10 / 11))}</td>
                 <td><span className={'pill ' + (i.status === 'approved' ? 'ok' : i.status === 'rejected' ? 'bad' : 'warn')}>{i.status}</span>{i.error && <div className="muted">{i.error}</div>}</td>
-                <td className="num">{i.status !== 'approved' && <button onClick={() => act(`/invoices/${i.id}/retry`, 'Reintento hecho')}>Reintentar</button>}</td></tr>
+                <td className="muted" style={{ fontSize: 11, wordBreak: 'break-all', maxWidth: 160 }}>{i.cdc ?? '—'}</td>
+                <td className="num row" style={{ justifyContent: 'flex-end' }}>{i.cdc && <button onClick={() => openKude(i.id).catch((e) => toast(e.message, true))}>Comprobante</button>}{i.status !== 'approved' && <button onClick={() => act(`/invoices/${i.id}/retry`, 'Reintento hecho')}>Reintentar</button>}</td></tr>
             ))}
-            {!rows.length && <tr><td colSpan={7} className="muted">Sin comprobantes</td></tr>}
+            {!rows.length && <tr><td colSpan={8} className="muted">Sin comprobantes</td></tr>}
           </tbody></table>
         </div>
       )}

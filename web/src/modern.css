@@ -219,6 +219,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--brand) 3%, var(--surface))
 .pos-page-head { align-items: end; }
 .pos-page-head .muted { margin: 5px 0 0; font-size: 13px; }
 .pos-last { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.pos-last-mobile { display: none; } /* en escritorio la última venta se muestra en la cabecera */
 .pos-last a { color: var(--brand-text); font-size: 12px; font-weight: 700; }
 .pos-kicker { display: block; color: var(--brand-text); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
 .pos-modern { grid-template-columns: minmax(0, 1fr) minmax(370px, 430px); gap: 20px; }

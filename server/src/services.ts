@@ -6,6 +6,8 @@ import { HttpError, withTx, type Db, type Tx } from './db/client.js'
 type Q = Db | Tx
 
 import { notify } from './notifications.js'
+import { consultarRuc, emitir, fetchKude, type FacturaPayload, type EmitResult } from './oietema.js'
+import { deleteSecret, getSecret, setSecret } from './secrets.js'
 
 export async function getSetting<T = any>(q: Q, key: string): Promise<T> {
   const { rows } = await q.query('SELECT value FROM settings WHERE key = $1', [key])
@@ -16,13 +18,62 @@ export async function getSetting<T = any>(q: Q, key: string): Promise<T> {
 // El proveedor real (SIFEN / DNIT) requiere timbrado, certificado y homologación.
 // Mientras tanto "mock" aprueba localmente para poder probar todo el circuito.
 export interface InvoiceDoc { number: string; kind: string; total: number; customer_name: string; customer_ruc: string | null }
-export interface SifenResult { status: 'approved' | 'rejected'; cdc?: string; error?: string }
+export interface SifenResult { status: 'approved' | 'rejected'; cdc?: string; number?: string; error?: string }
 
+// Modo "mock": aprueba localmente con un CDC ficticio, para probar el circuito sin facturar de verdad.
 export async function sifenSubmit(mode: string, doc: InvoiceDoc): Promise<SifenResult> {
   if (mode !== 'mock') throw new Error('Integración SIFEN real pendiente: falta timbrado, certificado y habilitación en la DNIT')
   if (doc.customer_ruc === 'RECHAZAR') return { status: 'rejected', error: 'RUC del receptor inválido (simulado)' }
   const digits = Array.from({ length: 44 }, (_, i) => (Number(doc.number.replace(/\D/g, '')[i % 12] ?? 0) + i) % 10).join('')
   return { status: 'approved', cdc: digits }
+}
+
+// Modo "oietema": facturación electrónica real. Arma el documento desde la fila `invoices` + sus `sale_items`.
+async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult> {
+  const apiKey = await getSecret(db, 'oietema_api_key')
+  if (!apiKey) throw new Error('Falta la clave de la API de facturación (cargala en Configuración).')
+  if (!cfg.tenant || !cfg.establishment || !cfg.point) throw new Error('Falta configurar tenant, establecimiento o punto de facturación.')
+  const oietemaCfg = { apiKey, tenant: cfg.tenant, establishment: String(cfg.establishment), point: String(cfg.point), format: cfg.format || 'A4' }
+
+  const { rows: sr } = await db.query('SELECT credit_amount, customer_id FROM sales WHERE id = $1', [inv.sale_id])
+  const sale = sr[0] ?? {}
+  const { rows: items } = await db.query('SELECT name, qty, unit_price, total, tax_rate FROM sale_items WHERE sale_id = $1 ORDER BY id', [inv.sale_id])
+
+  // Receptor. Sin RUC → consumidor final (RUC "XX", no contribuyente).
+  let RUC = 'XX', RAZON_SOCIAL = inv.customer_name || 'Sin Nombre', PERSONA: 'FISICA' | 'JURIDICA' = 'FISICA', CONTRIBUYENTE: 'SI' | 'NO' = 'NO'
+  if (inv.customer_ruc) {
+    RUC = String(inv.customer_ruc)
+    const { rows: cu } = sale.customer_id ? await db.query('SELECT doc_type, taxpayer, persona FROM customers WHERE id = $1', [sale.customer_id]) : { rows: [] as any[] }
+    const c = cu[0]
+    CONTRIBUYENTE = c?.taxpayer || c?.doc_type === 'ruc' ? 'SI' : 'NO'
+    PERSONA = c?.persona === 'JURIDICA' ? 'JURIDICA' : 'FISICA'
+  }
+
+  // Ítems: el descuento global se prorratea igual que en la contabilidad (saleTax) para que la suma coincida con el total.
+  const subtotal = items.reduce((s: number, it: any) => s + Number(it.total), 0)
+  const globalDisc = Math.max(0, subtotal - Number(inv.total))
+  let rest = globalDisc
+  const ITEMS = items.map((it: any, idx: number) => {
+    const share = idx === items.length - 1 ? rest : Math.round((globalDisc * Number(it.total)) / (subtotal || 1))
+    rest -= share
+    const net = Number(it.total) - share
+    const qty = Number(it.qty) || 1
+    return { DESCRIPCION: String(it.name).slice(0, 120), CANTIDAD: qty, PRECIO: Math.round(net / qty), IVA: (it.tax_rate === 10 ? 10 : it.tax_rate === 5 ? 5 : 0) as 0 | 5 | 10 }
+  })
+
+  const payload: FacturaPayload = {
+    RUC, RAZON_SOCIAL, PERSONA, CONTRIBUYENTE,
+    CONDICION: Number(sale.credit_amount) > 0 ? 'CREDITO' : 'CONTADO',
+    ...(Number(sale.credit_amount) > 0 ? { PLAZO: '30 dias' } : {}),
+    ITEMS,
+  }
+  if (inv.kind === 'credit_note') {
+    payload.TIPO_DOCUMENTO = 'NOTA_DE_CREDITO'
+    payload.MOTIVO = '1' // 1 = Devolución y ajuste de precios
+    const orig = inv.related_invoice_id ? (await db.query('SELECT cdc FROM invoices WHERE id = $1', [inv.related_invoice_id])).rows[0] : null
+    if (orig?.cdc) payload.FACTURA_CDC = orig.cdc
+  }
+  return emitir(oietemaCfg, payload)
 }
 
 export async function nextInvoiceNumber(tx: Tx, kind: 'invoice' | 'credit_note') {
@@ -50,9 +101,10 @@ export async function submitInvoice(db: Db, id: number) {
   const inv = rows[0]
   if (!inv || inv.status === 'approved') return inv
   const cfg = await getSetting(db, 'invoice')
+  const mode = cfg.mode ?? 'mock'
   try {
-    const r = await sifenSubmit(cfg.mode ?? 'mock', inv)
-    await db.query('UPDATE invoices SET status = $2, cdc = $3, error = $4, attempts = attempts + 1 WHERE id = $1', [id, r.status, r.cdc ?? null, r.error ?? null])
+    const r = mode === 'oietema' ? await emitirElectronica(db, inv, cfg) : await sifenSubmit(mode, inv)
+    await db.query('UPDATE invoices SET status = $2, cdc = $3, provider_number = COALESCE($4, provider_number), error = $5, attempts = attempts + 1 WHERE id = $1', [id, r.status, r.cdc ?? null, r.number ?? null, r.error ?? null])
     if (r.status === 'rejected') await notify(db, { type: 'invoice_rejected', title: `Factura rechazada ${inv.number}`, body: r.error ?? 'Revisá los datos del receptor.', link: '/automation', dedupeKey: `inv-rej:${id}:${inv.attempts}` }).catch(() => {})
   } catch (e: any) {
     await db.query(`UPDATE invoices SET status = 'pending', error = $2, attempts = attempts + 1 WHERE id = $1`, [id, e.message])
@@ -150,6 +202,45 @@ export function serviceRoutes(app: FastifyInstance, db: Db) {
     await db.query(`UPDATE invoices SET status = 'pending' WHERE id = $1 AND status = 'rejected'`, [id])
     await submitInvoice(db, id)
     return (await db.query('SELECT * FROM invoices WHERE id = $1', [id])).rows[0]
+  })
+
+  // KUDE: el comprobante imprimible (HTML) del proveedor. El servidor lo trae con el CDC para no exponer la clave ni chocar con CORS.
+  app.get('/invoices/:id/kude', async (req, reply) => {
+    requirePerm(req, 'invoices.view')
+    const id = Number((req.params as any).id)
+    const { rows } = await db.query('SELECT cdc FROM invoices WHERE id = $1', [id])
+    if (!rows[0]) throw new HttpError(404, 'Factura no encontrada')
+    if (!rows[0].cdc) throw new HttpError(409, 'La factura todavía no tiene CDC (no fue aprobada).')
+    const cfg = await getSetting<any>(db, 'invoice')
+    const apiKey = (await getSecret(db, 'oietema_api_key')) ?? ''
+    const fmt = ((req.query as any).formato as string) || cfg.format || 'A4'
+    const html = await fetchKude({ apiKey, tenant: cfg.tenant, establishment: String(cfg.establishment ?? ''), point: String(cfg.point ?? ''), format: cfg.format }, rows[0].cdc, fmt)
+    return reply.header('content-type', 'text/html; charset=utf-8').send(html)
+  })
+
+  // Clave de la API de facturación: se guarda cifrada (como la clave de IA); nunca se devuelve en claro.
+  app.get('/invoice/status', async (req) => {
+    requirePerm(req, 'reports.view')
+    const key = await getSecret(db, 'oietema_api_key')
+    return { apiKeyPresent: !!key, last4: key ? key.slice(-4) : null }
+  })
+  app.put('/invoice/api-key', async (req) => {
+    requirePerm(req, 'settings.write')
+    const { apiKey } = z.object({ apiKey: z.string().min(8) }).parse(req.body)
+    await setSecret(db, 'oietema_api_key', apiKey.trim())
+    return { ok: true }
+  })
+  app.delete('/invoice/api-key', async (req) => {
+    requirePerm(req, 'settings.write')
+    await deleteSecret(db, 'oietema_api_key')
+    return { ok: true }
+  })
+  // Probar conexión: consulta un RUC de prueba (sin consumir numeración ni emitir nada).
+  app.post('/invoice/test', async (req) => {
+    requirePerm(req, 'settings.write')
+    const r = await consultarRuc('80000004')
+    if (r.exists) return { ok: true, message: `Conexión correcta. RUC de prueba: ${r.razonSocial} (${r.rucConDv}).` }
+    return { ok: false, message: 'No se pudo consultar el RUC de prueba. Revisá la conexión a internet.' }
   })
 
   app.get('/outbox', async (req) => {

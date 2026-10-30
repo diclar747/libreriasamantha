@@ -19,6 +19,22 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
 }
 
 export const gs = (n: number | string | null | undefined) => 'Gs. ' + Number(n ?? 0).toLocaleString('es-PY')
+
+// Abre el comprobante electrónico (KUDE) del proveedor en una ventana nueva y lo manda a imprimir.
+// El HTML se trae con el token (la ruta pide permiso), por eso no se puede abrir la URL directamente.
+export async function openKude(invoiceId: number, formato?: string): Promise<void> {
+  const w = window.open('', '_blank')
+  if (!w) throw new Error('El navegador bloqueó la ventana. Permití las ventanas emergentes para imprimir.')
+  w.document.write('<p style="font:14px sans-serif;padding:20px">Cargando comprobante…</p>')
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`/api/invoices/${invoiceId}/kude${formato ? '?formato=' + formato : ''}`, { headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) } })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? 'No se pudo obtener el comprobante') }
+    const html = await res.text()
+    w.document.open(); w.document.write(html); w.document.close()
+    setTimeout(() => { try { w.focus(); w.print() } catch { /* el usuario imprime manualmente */ } }, 500)
+  } catch (e) { w.close(); throw e }
+}
 export const paymentMethodLabel = (method: string) => ({ cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', check: 'Cheque', online: 'Pago en línea', advance: 'Anticipo' })[method as 'cash' | 'card' | 'transfer' | 'check' | 'online' | 'advance'] ?? method
 
 interface Ctx { user: User | null; login(u: string, p: string): Promise<void>; passwordChanged(): void; logout(): void; toast(msg: string, err?: boolean): void }

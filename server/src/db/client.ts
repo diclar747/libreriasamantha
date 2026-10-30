@@ -16,7 +16,7 @@ export function createPool(url: string): Db {
 }
 
 export async function migrate(db: Db) {
-  for (const file of ['schema.sql', 'schema2.sql', 'schema4.sql', 'chart.sql', 'chart2.sql', 'schema5.sql', 'chart3.sql', 'schema6.sql', 'schema7.sql', 'schema8.sql','schema9.sql']) {
+  for (const file of ['schema.sql', 'schema2.sql', 'schema4.sql', 'chart.sql', 'chart2.sql', 'schema5.sql', 'chart3.sql', 'schema6.sql', 'schema7.sql', 'schema8.sql', 'schema9.sql', 'schema10.sql']) {
     await db.query(readFileSync(fileURLToPath(new URL('./' + file, import.meta.url)), 'utf8'))
   }
   await syncGeo(db)
