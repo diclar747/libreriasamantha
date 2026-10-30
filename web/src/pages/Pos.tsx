@@ -25,8 +25,9 @@ export default function Pos() {
   const [customers, setCustomers] = useState<any[]>([])
   const [customerId, setCustomerId] = useState('')
   const [docLookup, setDocLookup] = useState('')
-  const [docResult, setDocResult] = useState<any>(null) // {source:'set'|'none', ...}
+  const [docResult, setDocResult] = useState<any>(null) // {source:'set'|'none'|'addemail', ...}
   const [docName, setDocName] = useState('')
+  const [docEmail, setDocEmail] = useState('')
   const [docBusy, setDocBusy] = useState(false)
   const [onCredit, setOnCredit] = useState(false)
   const [cashOpen, setCashOpen] = useState<boolean | null>(null)
@@ -152,7 +153,7 @@ export default function Pos() {
     const [svc] = await api('/products?q=IMP-SERV')
     setWo(w); setCart([{ id: svc.id, name: `${w.number} · ${w.description}`, price: Number(w.price), qty: 1, discount: 0, available: 1, service: true }])
   }
-  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); setReview(false); setDocLookup(''); setDocResult(null); setDocName(''); saleKey.current = uid(); input.current?.focus() }
+  const reset = () => { setGlobalDisc(0); setSaleReason(''); setApproval(null); setWo(null); setCart([]); setPays({}); setCustomerId(''); setOnCredit(false); setActiveHeldId(null); setConfirmCancel(false); setReview(false); setDocLookup(''); setDocResult(null); setDocName(''); setDocEmail(''); saleKey.current = uid(); input.current?.focus() }
 
   async function charge() {
     if (!canCharge) return
@@ -195,28 +196,40 @@ export default function Pos() {
     setCart((current) => current.filter((line) => line.id !== id))
   }
   // Documento del cliente para facturar: busca primero local, si no está consulta a SET y permite crear/enriquecer.
-  const pickCustomer = (c: any) => { setCustomers((list) => (list.some((x) => x.id === c.id) ? list : [c, ...list])); setCustomerId(String(c.id)); setDocResult(null); setDocLookup(''); setDocName('') }
+  // Siempre se pide el correo: SET no lo trae y OñeTema envía la factura por correo.
+  const clearDoc = () => { setDocResult(null); setDocLookup(''); setDocName(''); setDocEmail('') }
+  const pickCustomer = (c: any) => { setCustomers((list) => (list.some((x) => x.id === c.id) ? [c, ...list.filter((x) => x.id !== c.id)] : [c, ...list])); setCustomerId(String(c.id)) }
   async function lookupDoc() {
     const doc = docLookup.trim()
     if (doc.replace(/\D/g, '').length < 5) { toast('Ingresá un RUC o cédula válido', true); return }
     setDocBusy(true); setDocResult(null)
     try {
       const r = await api('/customers/lookup?doc=' + encodeURIComponent(doc))
-      if (r.source === 'local') { pickCustomer(r.customer); toast('Cliente: ' + r.customer.name) }
-      else if (r.source === 'set') { setDocResult(r); setDocName(r.taxpayer.razonSocial) }
-      else { setDocResult(r); setDocName('') }
+      if (r.source === 'local') {
+        pickCustomer(r.customer); toast('Cliente: ' + r.customer.name)
+        // Si el cliente guardado no tiene correo, se ofrece cargarlo para enviarle la factura.
+        if (!r.customer.email) { setDocResult({ source: 'addemail', customer: r.customer }); setDocEmail('') } else clearDoc()
+      } else if (r.source === 'set') { setDocResult(r); setDocName(r.taxpayer.razonSocial); setDocEmail('') }
+      else { setDocResult(r); setDocName(''); setDocEmail('') }
     } catch (e: any) { toast(e.message, true) } finally { setDocBusy(false) }
   }
   async function createFromLookup() {
     try {
       const digits = docLookup.replace(/\D/g, '')
+      const email = docEmail.trim() || null
       const body = docResult.source === 'set'
-        ? { name: docName.trim(), ruc: docResult.taxpayer.ruc, document: docResult.taxpayer.ruc, doc_type: 'ruc', taxpayer: true, persona: docName.includes(',') ? 'FISICA' : 'JURIDICA' }
-        : { name: docName.trim(), ruc: digits, document: digits, doc_type: 'ci', taxpayer: false, persona: 'FISICA' }
+        ? { name: docName.trim(), ruc: docResult.taxpayer.ruc, document: docResult.taxpayer.ruc, doc_type: 'ruc', taxpayer: true, persona: docName.includes(',') ? 'FISICA' : 'JURIDICA', email }
+        : { name: docName.trim(), ruc: digits, document: digits, doc_type: 'ci', taxpayer: false, persona: 'FISICA', email }
       if (body.name.length < 2) { toast('Escribí el nombre del cliente', true); return }
       const c = await api('/customers', { body })
-      pickCustomer(c); toast('Cliente agregado para la factura')
+      pickCustomer(c); clearDoc(); toast('Cliente agregado para la factura')
     } catch (e: any) { toast(e.message, true) }
+  }
+  // Guarda el correo en un cliente ya existente (para que reciba la factura por correo).
+  async function saveEmailToCustomer(id: number) {
+    const email = docEmail.trim()
+    if (!/.+@.+\..+/.test(email)) { toast('Escribí un correo válido', true); return }
+    try { const c = await api('/customers/' + id, { method: 'PUT', body: { email } }); setCustomers((list) => list.map((x) => (x.id === id ? c : x))); clearDoc(); toast('Correo guardado') } catch (e: any) { toast(e.message, true) }
   }
 
   const units = cart.reduce((s, l) => s + l.qty, 0)
@@ -286,12 +299,19 @@ export default function Pos() {
               {docResult?.source === 'set' && <div className="okbox" style={{ padding: 8 }}>
                 <b>Encontrado en SET:</b> {docResult.taxpayer.ruc}
                 <input style={{ width: '100%', marginTop: 6 }} value={docName} onChange={(e) => setDocName(e.target.value)} aria-label="Razón social" />
-                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup}>Usar para la factura</button><button type="button" className="small" onClick={() => setDocResult(null)}>Cancelar</button></div>
+                <input type="email" style={{ width: '100%', marginTop: 6 }} value={docEmail} onChange={(e) => setDocEmail(e.target.value)} placeholder="Correo para enviar la factura (opcional)" aria-label="Correo del cliente" />
+                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup}>Usar para la factura</button><button type="button" className="small" onClick={clearDoc}>Cancelar</button></div>
               </div>}
               {docResult?.source === 'none' && <div className="warnbox" style={{ padding: 8 }}>
                 Ese documento no está en SET (cédula de no contribuyente). Escribí el nombre:
                 <input style={{ width: '100%', marginTop: 6 }} value={docName} onChange={(e) => setDocName(e.target.value)} placeholder="Nombre y apellido" aria-label="Nombre del cliente" />
-                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup} disabled={docName.trim().length < 2}>Agregar y usar</button><button type="button" className="small" onClick={() => setDocResult(null)}>Cancelar</button></div>
+                <input type="email" style={{ width: '100%', marginTop: 6 }} value={docEmail} onChange={(e) => setDocEmail(e.target.value)} placeholder="Correo para enviar la factura (opcional)" aria-label="Correo del cliente" />
+                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={createFromLookup} disabled={docName.trim().length < 2}>Agregar y usar</button><button type="button" className="small" onClick={clearDoc}>Cancelar</button></div>
+              </div>}
+              {docResult?.source === 'addemail' && <div className="okbox" style={{ padding: 8 }}>
+                <b>{docResult.customer.name}</b> ya está seleccionado. Cargá un correo para enviarle la factura:
+                <input type="email" style={{ width: '100%', marginTop: 6 }} value={docEmail} onChange={(e) => setDocEmail(e.target.value)} placeholder="Correo del cliente" aria-label="Correo del cliente" />
+                <div className="row" style={{ marginTop: 6 }}><button type="button" className="primary small" onClick={() => saveEmailToCustomer(docResult.customer.id)}>Guardar correo</button><button type="button" className="small" onClick={clearDoc}>Ahora no</button></div>
               </div>}
             </div>
             <div className="pos-pay-label">Pago al contado</div>

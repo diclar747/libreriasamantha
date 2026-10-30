@@ -41,10 +41,13 @@ async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult
 
   // Receptor. Sin RUC → consumidor final (RUC "XX", no contribuyente).
   let RUC = 'XX', RAZON_SOCIAL = inv.customer_name || 'Sin Nombre', PERSONA: 'FISICA' | 'JURIDICA' = 'FISICA', CONTRIBUYENTE: 'SI' | 'NO' = 'NO'
+  // Correo del receptor: OñeTema le envía la factura (KUDE) por correo. Sale del cliente, o del pedido online si no hay cliente.
+  const { rows: cu } = sale.customer_id ? await db.query('SELECT doc_type, taxpayer, persona, email FROM customers WHERE id = $1', [sale.customer_id]) : { rows: [] as any[] }
+  const c = cu[0]
+  let email: string | null = c?.email || null
+  if (!email) { const { rows: o } = await db.query('SELECT email FROM orders WHERE sale_id = $1 LIMIT 1', [inv.sale_id]); email = o[0]?.email || null }
   if (inv.customer_ruc) {
     RUC = String(inv.customer_ruc)
-    const { rows: cu } = sale.customer_id ? await db.query('SELECT doc_type, taxpayer, persona FROM customers WHERE id = $1', [sale.customer_id]) : { rows: [] as any[] }
-    const c = cu[0]
     CONTRIBUYENTE = c?.taxpayer || c?.doc_type === 'ruc' ? 'SI' : 'NO'
     PERSONA = c?.persona === 'JURIDICA' ? 'JURIDICA' : 'FISICA'
   }
@@ -65,6 +68,7 @@ async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult
     RUC, RAZON_SOCIAL, PERSONA, CONTRIBUYENTE,
     CONDICION: Number(sale.credit_amount) > 0 ? 'CREDITO' : 'CONTADO',
     ...(Number(sale.credit_amount) > 0 ? { PLAZO: '30 dias' } : {}),
+    ...(email ? { EMAIL: email } : {}),
     ITEMS,
   }
   if (inv.kind === 'credit_note') {
