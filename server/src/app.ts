@@ -19,6 +19,7 @@ import { getSetting } from './services.js'
 import { chatRoutes, testChat, winsapWebhookRoutes } from './chatbot.js'
 import { aiCredentials, aiRoutes } from './ai.js'
 import { profileRoutes } from './notifications.js'
+import { campaignAdminRoutes, campaignPublicRoutes } from './campaigns.js'
 import { treasuryRoutes } from './routes/treasury.js'
 import { cashRoutes } from './routes/cash.js'
 import { reportRoutes } from './reports/routes.js'
@@ -97,7 +98,7 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
     })
 
     // Rutas públicas (tienda, chat, webhooks): sin sesión de usuario.
-    api.register(async (pub) => { shopRoutes(pub, db); onlineShopRoutes(pub, db); scanPublicRoutes(pub, db); portalRoutes(pub, db); imageRoutes(pub, db); chatRoutes(pub, db); agentRoutes(pub, db); printRequestRoutes(pub, db) }, { prefix: '/shop' })
+    api.register(async (pub) => { shopRoutes(pub, db); onlineShopRoutes(pub, db); scanPublicRoutes(pub, db); portalRoutes(pub, db); imageRoutes(pub, db); chatRoutes(pub, db); agentRoutes(pub, db); printRequestRoutes(pub, db); campaignPublicRoutes(pub, db) }, { prefix: '/shop' })
     api.register(async (hooks) => { webhookRoutes(hooks, db); winsapWebhookRoutes(hooks, db) }, { prefix: '/webhooks' })
 
     api.register(async (priv) => {
@@ -148,6 +149,7 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
         return testChat(db, m, u)
       })
       profileRoutes(priv, db)
+      campaignAdminRoutes(priv, db)
       treasuryRoutes(priv, db)
       cashRoutes(priv, db)
       reportRoutes(priv, db)

@@ -88,3 +88,36 @@ button.mini { min-height: 0; padding: 3px 10px; font-size: 12px; border-radius: 
   .st-line { flex-wrap: wrap; }
   .st-foot { padding-bottom: 96px; }
 }
+
+/* ---- Pedido de permiso de notificaciones (cartelito suave, abajo) ---- */
+.st-optin { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 30; margin-inline: auto; max-width: 460px; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border: 2px solid var(--text); border-radius: 16px; box-shadow: 6px 6px 0 var(--text); animation: st-optin-in .32s cubic-bezier(.2,.9,.3,1.3); }
+@keyframes st-optin-in { from { transform: translateY(120%); opacity: 0; } to { transform: none; opacity: 1; } }
+.st-optin-ico { font-size: 26px; line-height: 1; }
+.st-optin-txt { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.st-optin-txt b { font-family: var(--font-display); font-size: 15px; }
+.st-optin-txt span { font-size: 12px; color: var(--muted, #6b7280); line-height: 1.35; }
+.st-optin-act { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.st-optin-no { background: transparent; border: 0; color: var(--muted, #6b7280); font-size: 13px; padding: 6px; }
+.st-optin-yes { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 99px; padding: 9px 16px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+@media (max-width: 520px) { .st-optin { flex-wrap: wrap; } .st-optin-act { width: 100%; justify-content: flex-end; } }
+
+/* ---- Pop-up de oferta al abrir la tienda ---- */
+.st-offer-backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, #0b1020 55%, transparent); backdrop-filter: blur(3px); animation: st-fade .2s; }
+@keyframes st-fade { from { opacity: 0; } to { opacity: 1; } }
+.st-offer { position: relative; width: min(420px, 100%); background: var(--surface); border: 2px solid var(--text); border-radius: 20px; box-shadow: 8px 8px 0 var(--text); overflow: hidden; animation: st-pop .34s cubic-bezier(.2,.9,.3,1.3); }
+@keyframes st-pop { from { transform: scale(.92) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+.st-offer-x { position: absolute; top: 8px; right: 10px; z-index: 2; width: 34px; height: 34px; border-radius: 99px; border: 0; background: color-mix(in srgb, var(--surface) 80%, transparent); font-size: 22px; line-height: 1; cursor: pointer; }
+.st-offer-img { cursor: pointer; background: var(--surface-2); aspect-ratio: 16/10; overflow: hidden; }
+.st-offer-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-offer-body { padding: 18px 20px 20px; display: grid; gap: 10px; }
+.st-offer-tag { justify-self: start; display: inline-flex; align-items: center; gap: 5px; background: var(--marker); color: #1d2030; border-radius: 99px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
+.st-offer-body h2 { font-family: var(--font-display); font-size: 22px; line-height: 1.15; margin: 0; }
+.st-offer-body p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text); }
+.st-offer-prod { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 12px; }
+.st-offer-prod span { font-size: 13px; }
+.st-offer-prod b { font-family: var(--font-display); font-size: 18px; white-space: nowrap; }
+.st-offer-prod s { color: var(--muted, #6b7280); font-weight: 500; font-size: 13px; margin-left: 6px; }
+.st-offer-cta { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 12px; padding: 13px; font-weight: 700; font-size: 15px; width: 100%; cursor: pointer; }
+.st-offer-dots { display: flex; gap: 6px; justify-content: center; padding-top: 2px; }
+.st-offer-dots i { width: 8px; height: 8px; border-radius: 99px; background: var(--border); cursor: pointer; }
+.st-offer-dots i.on { background: var(--brand); width: 20px; }

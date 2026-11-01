@@ -9,6 +9,7 @@ import { Icon } from '../components/Icons'
 import ThemePicker from '../components/ThemePicker'
 import './store.css'
 import { AccountArea, CustomerProvider, ForgotPage, LoginPage, RegisterPage, ResetPage, VerifyPage, cust, uid, useCustomer } from './Account'
+import { pushSupported, subscribeOffers } from '../push'
 
 async function shop<T = any>(path: string, body?: unknown): Promise<T> {
   const res = await fetch('/api/shop' + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
@@ -230,8 +231,85 @@ function Layout({ children }: { children: ReactNode }) {
         <div><b>Tu compra</b><Link to="/tienda">Explorar productos</Link><Link to="/tienda/pedido">Seguir mi pedido</Link><Link to="/tienda/listas">Listas escolares</Link>{profile ? <Link to="/tienda/cuenta">Mi cuenta</Link> : <Link to="/tienda/registro">Crear mi cuenta</Link>}<Link to="/admin">Acceso del personal</Link></div>
         <div><b>Contacto</b>{info?.address && <span>{info.address}</span>}{info?.hours && <span>{info.hours}</span>}{wa && <a href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola, quiero consultar por un producto')}`} target="_blank" rel="noreferrer">Escribinos por WhatsApp</a>}<a href={INSTAGRAM} target="_blank" rel="noreferrer">Seguinos en Instagram</a></div>
       </footer>
+      <PushOptIn />
+      <OfferPopup />
       <ChatWidget />
       <InstallBanner />
+    </div>
+  )
+}
+
+// Cartelito suave para pedir permiso de notificaciones (nunca dispara el prompt nativo de entrada: eso quema el permiso).
+function PushOptIn() {
+  const { toast } = useApp()
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!pushSupported() || Notification.permission !== 'default') return
+    let dismissed = 0
+    try { dismissed = Number(localStorage.getItem('samantha.push.ask') ?? 0) } catch { /* modo privado */ }
+    if (Date.now() - dismissed < 7 * 24 * 3600 * 1000) return // no volver a molestar por una semana
+    const t = setTimeout(() => setShow(true), 6000) // recién después de que el cliente mira un rato
+    return () => clearTimeout(t)
+  }, [])
+  const later = () => { try { localStorage.setItem('samantha.push.ask', String(Date.now())) } catch { /* */ } setShow(false) }
+  const accept = async () => {
+    setBusy(true)
+    try { await subscribeOffers(); toast('¡Listo! Te avisaremos de las ofertas 🎉'); try { localStorage.setItem('samantha.push.ask', String(Date.now())) } catch { /* */ } setShow(false) }
+    catch (e: any) { toast(e.message, true); later() }
+    finally { setBusy(false) }
+  }
+  if (!show) return null
+  return (
+    <div className="st-optin" role="dialog" aria-label="Notificaciones de ofertas">
+      <div className="st-optin-ico">🔔</div>
+      <div className="st-optin-txt"><b>¿Querés enterarte de las ofertas?</b><span>Librería Samantha te avisa de promos y novedades. Podés desactivarlo cuando quieras.</span></div>
+      <div className="st-optin-act">
+        <button className="st-optin-no" onClick={later} disabled={busy}>Ahora no</button>
+        <button className="st-optin-yes" onClick={accept} disabled={busy}>{busy ? 'Activando…' : 'Sí, avisame'}</button>
+      </div>
+    </div>
+  )
+}
+
+// Pop-up de oferta al abrir la tienda. Si hay varias campañas vigentes, rotan por visita (round-robin).
+function OfferPopup() {
+  const nav = useNavigate()
+  const [offers, setOffers] = useState<any[]>([])
+  const [cur, setCur] = useState<any>(null)
+  useEffect(() => {
+    let shown = false
+    try { shown = sessionStorage.getItem('samantha.offer.seen') === '1' } catch { /* */ }
+    if (shown) return
+    shop('/offers').then((rows: any[]) => {
+      if (!rows?.length) return
+      let idx = 0
+      try { idx = Number(localStorage.getItem('samantha.offer.idx') ?? 0) % rows.length; localStorage.setItem('samantha.offer.idx', String((idx + 1) % rows.length)) } catch { /* */ }
+      setOffers(rows); setCur(rows[idx])
+      try { sessionStorage.setItem('samantha.offer.seen', '1') } catch { /* */ }
+    }).catch(() => {})
+  }, [])
+  if (!cur) return null
+  const close = () => setCur(null)
+  const go = () => { close(); nav((cur.link ?? '/tienda').replace(/^https?:\/\/[^/]+/, '')) }
+  const price = cur.product?.price
+  return (
+    <div className="st-offer-backdrop" onClick={close}>
+      <div className="st-offer" role="dialog" aria-label={cur.title} onClick={(e) => e.stopPropagation()}>
+        <button className="st-offer-x" onClick={close} aria-label="Cerrar">×</button>
+        {cur.image_url && <div className="st-offer-img" onClick={go}><img src={cur.image_url} alt={cur.title} /></div>}
+        <div className="st-offer-body">
+          <span className="st-offer-tag"><SfIcon n="tag" size={15} /> Oferta</span>
+          <h2>{cur.title}</h2>
+          {cur.body && <p>{cur.body}</p>}
+          {cur.product && <div className="st-offer-prod">
+            <span>{cur.product.name}</span>
+            {price != null && <b>{gs(price)}{cur.product.list_price && cur.product.list_price !== price ? <s>{gs(cur.product.list_price)}</s> : null}</b>}
+          </div>}
+          <button className="st-offer-cta" onClick={go}>{cur.product ? 'Ver el producto' : 'Ver la oferta'}</button>
+          {offers.length > 1 && <div className="st-offer-dots" aria-hidden="true">{offers.map((o) => <i key={o.id} className={o.id === cur.id ? 'on' : ''} onClick={() => setCur(o)} />)}</div>}
+        </div>
+      </div>
     </div>
   )
 }

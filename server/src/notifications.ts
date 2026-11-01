@@ -28,7 +28,7 @@ export async function notify(q: Q, n: { type: keyof typeof NOTIFICATION_TYPES; t
 }
 
 // ---------------------------------------------------------------- Web Push (VAPID, nativo de Node)
-async function vapid(db: Db) {
+export async function vapid(db: Db) {
   let publicKey = (await getSetting(db, 'push')).publicKey as string | undefined
   let privateKey = await getSecret(db, 'vapid_private')
   if (!publicKey || !privateKey) {
@@ -42,19 +42,28 @@ async function vapid(db: Db) {
 
 const wants = (prefs: any, type: string, channel: 'push' | 'inapp') => prefs?.[type]?.[channel] !== false
 
+export type Vapid = Awaited<ReturnType<typeof vapid>>
+
+// Envía un push a una sola suscripción. Devuelve 'ok', 'gone' (el dispositivo ya no existe → hay que borrarlo) o 'error'.
+export async function pushOne(v: Vapid, sub: { endpoint: string; p256dh: string; auth: string }, payload: object): Promise<'ok' | 'gone' | 'error'> {
+  try {
+    await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload),
+      { vapidDetails: { subject: v.subject, publicKey: v.publicKey, privateKey: v.privateKey }, TTL: 3600 })
+    return 'ok'
+  } catch (e: any) {
+    return (e.statusCode === 404 || e.statusCode === 410) ? 'gone' : 'error'
+  }
+}
+
 async function sendTo(db: Db, subs: any[], payload: object) {
   if (!subs.length) return 0
   const v = await vapid(db)
   let sent = 0
   await Promise.all(subs.map(async (s) => {
-    try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload),
-        { vapidDetails: { subject: v.subject, publicKey: v.publicKey, privateKey: v.privateKey }, TTL: 3600 })
-      sent++
-    } catch (e: any) {
-      // 404/410: el dispositivo ya no existe; se limpia la suscripción.
-      if (e.statusCode === 404 || e.statusCode === 410) await db.query('DELETE FROM push_subscriptions WHERE id = $1', [s.id])
-    }
+    const r = await pushOne(v, s, payload)
+    if (r === 'ok') sent++
+    // 404/410: el dispositivo ya no existe; se limpia la suscripción.
+    else if (r === 'gone') await db.query('DELETE FROM push_subscriptions WHERE id = $1', [s.id])
   }))
   return sent
 }
