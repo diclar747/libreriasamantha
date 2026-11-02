@@ -338,6 +338,65 @@ function ProductCard({ p }: { p: any }) {
   )
 }
 
+// Versículos de aliento (Reina Valera). Uno por día, el mismo durante todo el día, rota con el calendario.
+const VERSES: [string, string][] = [
+  ['Todo lo puedo en Cristo que me fortalece.', 'Filipenses 4:13'],
+  ['Esfuérzate y sé valiente; no temas ni desmayes, porque Jehová tu Dios estará contigo dondequiera que vayas.', 'Josué 1:9'],
+  ['Jehová es mi pastor; nada me faltará.', 'Salmos 23:1'],
+  ['Yo sé los pensamientos que tengo acerca de vosotros, pensamientos de paz, para daros un futuro y una esperanza.', 'Jeremías 29:11'],
+  ['No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo.', 'Isaías 41:10'],
+  ['Fíate de Jehová de todo tu corazón, y no te apoyes en tu propia prudencia.', 'Proverbios 3:5'],
+  ['Dios es nuestro amparo y fortaleza, nuestro pronto auxilio en las tribulaciones.', 'Salmos 46:1'],
+  ['Venid a mí todos los que estáis trabajados y cargados, y yo os haré descansar.', 'Mateo 11:28'],
+  ['A los que aman a Dios, todas las cosas les ayudan a bien.', 'Romanos 8:28'],
+  ['Encomienda a Jehová tu camino, y confía en él; y él hará.', 'Salmos 37:5'],
+  ['Los que esperan a Jehová tendrán nuevas fuerzas; levantarán alas como las águilas.', 'Isaías 40:31'],
+  ['Por fe andamos, no por vista.', '2 Corintios 5:7'],
+  ['Este es el día que hizo Jehová; nos gozaremos y alegraremos en él.', 'Salmos 118:24'],
+  ['Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios.', 'Filipenses 4:6'],
+  ['Mi socorro viene de Jehová, que hizo los cielos y la tierra.', 'Salmos 121:2'],
+  ['Esforzaos y cobrad ánimo; no temáis, porque Jehová tu Dios es el que va contigo.', 'Deuteronomio 31:6'],
+  ['Echa sobre Jehová tu carga, y él te sustentará.', 'Salmos 55:22'],
+  ['La paz os dejo, mi paz os doy; no se turbe vuestro corazón, ni tenga miedo.', 'Juan 14:27'],
+  ['Encomienda a Jehová tus obras, y tus pensamientos serán afirmados.', 'Proverbios 16:3'],
+  ['Gustad, y ved que es bueno Jehová; dichoso el hombre que confía en él.', 'Salmos 34:8'],
+  ['Jehová es mi fortaleza y mi escudo; en él confió mi corazón, y fui ayudado.', 'Salmos 28:7'],
+  ['Buscad primeramente el reino de Dios y su justicia, y todas estas cosas os serán añadidas.', 'Mateo 6:33'],
+  ['Jehová es mi luz y mi salvación; ¿de quién temeré?', 'Salmos 27:1'],
+  ['El Dios de esperanza os llene de todo gozo y paz en el creer.', 'Romanos 15:13'],
+  ['Nuevas son cada mañana sus misericordias; grande es su fidelidad.', 'Lamentaciones 3:23'],
+  ['Es la fe la certeza de lo que se espera, la convicción de lo que no se ve.', 'Hebreos 11:1'],
+  ['El que habita al abrigo del Altísimo morará bajo la sombra del Omnipotente.', 'Salmos 91:1'],
+  ['No nos cansemos de hacer bien; porque a su tiempo segaremos, si no desmayamos.', 'Gálatas 6:9'],
+  ['La roca de mi corazón y mi porción es Dios para siempre.', 'Salmos 73:26'],
+  ['Torre fuerte es el nombre de Jehová; a él correrá el justo, y será levantado.', 'Proverbios 18:10'],
+  ['Echando toda vuestra ansiedad sobre él, porque él tiene cuidado de vosotros.', '1 Pedro 5:7'],
+  ['El gozo de Jehová es vuestra fuerza.', 'Nehemías 8:10'],
+  ['Cuando pases por las aguas, yo estaré contigo.', 'Isaías 43:2'],
+  ['Todo lo que hagáis, hacedlo de corazón, como para el Señor.', 'Colosenses 3:23'],
+  ['Mira que te mando que te esfuerces y seas valiente; no temas ni desmayes.', 'Josué 1:9'],
+  ['Clama a mí, y yo te responderé, y te enseñaré cosas grandes y ocultas.', 'Jeremías 33:3'],
+  ['Bueno es Jehová para los que en él esperan, para el alma que le busca.', 'Lamentaciones 3:25'],
+  ['Confía en Jehová, y haz el bien; y tendrás por heredad la tierra.', 'Salmos 37:3'],
+  ['El amor es sufrido, es benigno; todo lo cree, todo lo espera, todo lo soporta.', '1 Corintios 13:4-7'],
+  ['Lámpara es a mis pies tu palabra, y lumbrera a mi camino.', 'Salmos 119:105'],
+]
+
+function DailyVerse() {
+  const [text, ref] = useMemo(() => {
+    const now = new Date()
+    const day = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
+    return VERSES[((day % VERSES.length) + VERSES.length) % VERSES.length]
+  }, [])
+  return (
+    <aside className="sf-verse" aria-label="Versículo del día">
+      <span className="sf-verse-label">✝ Versículo del día</span>
+      <p className="sf-verse-text">{text}</p>
+      <span className="sf-verse-ref">{ref}</span>
+    </aside>
+  )
+}
+
 function Home() {
   useSeo('Samantha — Libros y regalos | Historias que transforman vidas', 'Biblias, devocionales, libros y regalos cristianos para niños, mujeres, hombres y matrimonios. Comprá en línea con envíos a todo Paraguay.')
   const [sp] = useSearchParams()
@@ -374,6 +433,7 @@ function Home() {
             <a href="#catalogo" className="sf-btn" onClick={(e) => { e.preventDefault(); document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' }) }}>Ver productos <SfIcon n="arrow" size={18} /></a>
           </div>
           <div className="sf-hero-art"><img src="/images/hero-cristiano.png" alt="Biblia abierta, libros y una cruz con ramas de olivo" /></div>
+          <DailyVerse />
         </div>
       </section>}
 
