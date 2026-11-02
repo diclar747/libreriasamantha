@@ -383,16 +383,70 @@ const VERSES: [string, string][] = [
 ]
 
 function DailyVerse() {
+  const todayKey = useMemo(() => { const n = new Date(); return `${n.getFullYear()}-${n.getMonth() + 1}-${n.getDate()}` }, [])
   const [text, ref] = useMemo(() => {
     const now = new Date()
-    const day = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
+    const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000)
     return VERSES[((day % VERSES.length) + VERSES.length) % VERSES.length]
   }, [])
+  // Cerrado solo por el día de hoy: mañana vuelve con el versículo nuevo.
+  const [closed, setClosed] = useState(() => { try { return localStorage.getItem('samantha.verse.closed') === todayKey } catch { return false } })
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => { try { const s = localStorage.getItem('samantha.verse.pos'); return s ? JSON.parse(s) : null } catch { return null } })
+  const box = useRef<HTMLElement>(null)
+  const drag = useRef<{ dx: number; dy: number; moved: boolean; last: { x: number; y: number } | null }>({ dx: 0, dy: 0, moved: false, last: null })
+  const { toast } = useApp()
+  const reactKey = `samantha.verse.react.${ref}`
+  const [reaction, setReaction] = useState<string | null>(() => { try { return localStorage.getItem(reactKey) } catch { return null } })
+  const [shareOpen, setShareOpen] = useState(false)
+  if (closed) return null
+  const close = () => { setClosed(true); try { localStorage.setItem('samantha.verse.closed', todayKey) } catch { /* modo privado */ } }
+  const react = (r: string) => { const nv = reaction === r ? null : r; setReaction(nv); try { nv ? localStorage.setItem(reactKey, nv) : localStorage.removeItem(reactKey) } catch { /* */ } }
+  const shareText = `“${text}” — ${ref}`
+  const shareUrl = 'https://libreriasamantha.com.py/tienda'
+  const full = `${shareText}\n\n${shareUrl}`
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ title: 'Versículo del día — Samantha', text: shareText, url: shareUrl }) } catch { /* el usuario canceló */ } return }
+    setShareOpen((o) => !o)
+  }
+  const copy = async () => { try { await navigator.clipboard.writeText(full); toast('Versículo copiado ✓') } catch { toast('No se pudo copiar', true) } setShareOpen(false) }
+  const onDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button, a')) return        // los botones/links no arrastran
+    if (window.matchMedia('(max-width: 719px)').matches) return       // en teléfono queda fijo debajo del hero
+    const r = box.current!.getBoundingClientRect()
+    drag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false, last: null }
+    box.current!.setPointerCapture(e.pointerId)
+  }
+  const onMove = (e: React.PointerEvent) => {
+    if (!box.current!.hasPointerCapture?.(e.pointerId)) return
+    const parent = (box.current!.offsetParent as HTMLElement).getBoundingClientRect()
+    const w = box.current!.offsetWidth, h = box.current!.offsetHeight
+    const x = Math.max(0, Math.min(e.clientX - parent.left - drag.current.dx, parent.width - w))
+    const y = Math.max(0, Math.min(e.clientY - parent.top - drag.current.dy, parent.height - h))
+    drag.current.moved = true; drag.current.last = { x, y }
+    setPos({ x, y })
+  }
+  const onUp = () => { if (drag.current.moved && drag.current.last) { try { localStorage.setItem('samantha.verse.pos', JSON.stringify(drag.current.last)) } catch { /* */ } } drag.current.moved = false }
+  const style = pos ? { left: pos.x, top: pos.y, right: 'auto' as const, transform: 'none' } : undefined
   return (
-    <aside className="sf-verse" aria-label="Versículo del día">
+    <aside ref={box} className="sf-verse" style={style} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} aria-label="Versículo del día">
+      <button type="button" className="sf-verse-x" onClick={close} aria-label="Cerrar el versículo del día">×</button>
       <span className="sf-verse-label">✝ Versículo del día</span>
       <p className="sf-verse-text">{text}</p>
       <span className="sf-verse-ref">{ref}</span>
+      <div className="sf-verse-acts">
+        <button type="button" className={'sf-verse-act' + (reaction === 'like' ? ' on' : '')} onClick={() => react('like')} aria-label="Me gusta" title="Me gusta">👍</button>
+        <button type="button" className={'sf-verse-act' + (reaction === 'dislike' ? ' on' : '')} onClick={() => react('dislike')} aria-label="No me gusta" title="No me gusta">👎</button>
+        <button type="button" className="sf-verse-act sf-verse-share" onClick={share} aria-label="Compartir" title="Compartir">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 10.6l6.8-4M8.6 13.4l6.8 4" /></svg>
+          Compartir
+        </button>
+      </div>
+      {shareOpen && <div className="sf-verse-share-menu" role="menu">
+        <a href={`https://wa.me/?text=${encodeURIComponent(full)}`} target="_blank" rel="noreferrer" onClick={() => setShareOpen(false)}><SfIcon n="chat" size={16} /> WhatsApp</a>
+        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => setShareOpen(false)}>f Facebook</a>
+        <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer" onClick={() => setShareOpen(false)}>𝕏 X</a>
+        <button type="button" onClick={copy}>⧉ Copiar</button>
+      </div>}
     </aside>
   )
 }

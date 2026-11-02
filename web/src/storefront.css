@@ -84,6 +84,17 @@
 .sf-verse-text::before { content: '“'; }
 .sf-verse-text::after { content: '”'; }
 .sf-verse-ref { font-size: 13px; font-weight: 700; color: var(--gold-ink, #7a5a12); }
+.sf-verse-x { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; min-height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 99px; background: color-mix(in srgb, var(--bg) 55%, transparent); color: #7a5a12; font-size: 17px; line-height: 1; cursor: pointer; }
+.sf-verse-x:hover { background: color-mix(in srgb, var(--gold) 20%, var(--bg)); }
+.sf-verse-acts { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.sf-verse-act { min-height: 34px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 99px; background: color-mix(in srgb, #fffdf6 70%, transparent); color: #4f4128; font-size: 14px; font-weight: 600; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s; }
+.sf-verse-act:hover { border-color: var(--gold); }
+.sf-verse-act.on { background: color-mix(in srgb, var(--gold) 20%, #fffdf6); border-color: var(--gold); }
+.sf-verse-share { margin-left: auto; }
+.sf-verse-share-menu { position: absolute; left: 20px; right: 20px; bottom: 56px; display: grid; gap: 2px; padding: 6px; border-radius: 12px; background: #fffdf6; border: 1px solid #e6d6a8; box-shadow: 0 16px 34px -14px rgb(80 55 8 / 48%); z-index: 3; }
+.sf-verse-share-menu a, .sf-verse-share-menu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 0; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: #2b2218; font-size: 14px; font-weight: 600; text-align: left; text-decoration: none; cursor: pointer; }
+.sf-verse-share-menu a:hover, .sf-verse-share-menu button:hover { background: color-mix(in srgb, var(--gold) 16%, #fffdf6); }
+@media (min-width: 720px) { .sf-verse { cursor: grab; touch-action: none; } .sf-verse:active { cursor: grabbing; } .sf-verse button, .sf-verse a { cursor: pointer; } }
 @media (max-width: 719px) { .sf-verse { position: static; transform: none; width: auto; max-width: none; margin: 2px 0 8px; } }
 @keyframes sf-rise { from { transform: translateY(26px); opacity: 0; } }
 
