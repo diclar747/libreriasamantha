@@ -44,6 +44,8 @@ const saleBody = z.object({
   discountReason: z.string().trim().max(200).optional(),
   approvalToken: z.string().optional(),
   idempotencyKey: z.string().min(8).max(80).optional(),
+  // El POS permite vender un producto aunque no tenga stock (el libro está en la mano): el stock queda en negativo como aviso de reposición.
+  allowNoStock: z.boolean().default(false),
 })
 
 // Valida y completa el detalle exigido por cada medio de cobro.
@@ -274,7 +276,8 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
       })
       for (const [pid, qty] of wanted) {
         const p = byId.get(pid)!
-        if (p.stock - p.reserved < qty) throw new HttpError(409, `Stock insuficiente de "${p.name}" (disponible ${p.stock - p.reserved})`)
+        // Con allowNoStock el cajero vende igual (queda stock negativo); si no, se exige stock disponible.
+        if (!b.allowNoStock && p.stock - p.reserved < qty) throw new HttpError(409, `Stock insuficiente de "${p.name}" (disponible ${p.stock - p.reserved})`)
       }
       if (b.discount > subtotal) throw new HttpError(400, 'Descuento mayor al total')
       if (b.discount > subtotal * MAX_LIMITED_DISCOUNT && !mayDiscount) {
@@ -331,7 +334,7 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
           [saleId, l.p.id, l.p.name, l.qty, l.price, netCost(Number(l.p.cost), l.p.cost_includes_vat, l.p.tax_rate), l.discount, l.p.tax_rate, l.total, l.list, l.promo, l.discount > 0 ? 'manual' : l.promo ? 'offer' : null])
         if (l.discount > 0) await tx.query('UPDATE sale_items SET discount_pct = $2 WHERE sale_id = $1 AND product_id = $3', [saleId, Math.round((l.discount / (l.price * l.qty)) * 10000) / 100, l.p.id])
         if (l.p.kind === 'product') {
-          await moveStock(tx, { productId: l.p.id, delta: -l.qty, type: 'sale', unitCost: Number(l.p.cost), refType: 'sale', refId: saleId, userId: user.id })
+          await moveStock(tx, { productId: l.p.id, delta: -l.qty, type: 'sale', unitCost: Number(l.p.cost), refType: 'sale', refId: saleId, userId: user.id, allowNegative: b.allowNoStock })
         }
       }
       for (const p of payments) {

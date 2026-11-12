@@ -91,7 +91,8 @@ export default function Pos() {
     if (wo) { toast('Terminá el cobro de la impresión antes de agregar otros productos', true); return }
     setCart((c) => {
       const i = c.findIndex((l) => l.id === p.id)
-      if (i >= 0) return c.map((l, j) => j === i && (l.service || l.available === null || l.qty < l.available) ? { ...l, qty: l.qty + 1 } : l)
+      // Se puede sumar aunque supere el stock: si el producto no tiene existencias se vende igual y el stock queda en negativo.
+      if (i >= 0) return c.map((l, j) => j === i ? { ...l, qty: l.qty + 1 } : l)
       return [...c, { id: p.id, name: p.name, price: Number(p.sell_price ?? p.price), qty: 1, discount: 0, available: p.available ?? null, service: p.kind === 'service', image_url: p.image_url, list: Number(p.price), promo: p.on_offer ? p.offer_label_now : null }]
     })
   }
@@ -100,7 +101,6 @@ export default function Pos() {
       if (line.id !== id) return [line]
       const qty = line.qty + by
       if (qty < 1) return []
-      if (!line.service && line.available !== null && qty > line.available) return [line]
       return [{ ...line, qty }]
     }))
   }
@@ -125,7 +125,7 @@ export default function Pos() {
     if (exact) { add(exact); setQ('') }
   }
   const addByCode = async (code: string, source = 'lector') => {
-    try { const p = await api('/products/lookup?code=' + encodeURIComponent(code)); if (!p.active) { toast(`"${p.name}" está inactivo`, true); return } if (p.kind === 'product' && p.available <= 0) { toast(`"${p.name}" está agotado`, true); return } add(p); toast(`+1 ${p.name}`) } catch { toast(`No existe un producto con el código ${code} (${source})`, true) }
+    try { const p = await api('/products/lookup?code=' + encodeURIComponent(code)); if (!p.active) { toast(`"${p.name}" está inactivo`, true); return } add(p); if (p.kind === 'product' && p.available <= 0) toast(`+1 ${p.name} · sin stock, se vende igual`, true); else toast(`+1 ${p.name}`) } catch { toast(`No existe un producto con el código ${code} (${source})`, true) }
   }
   useKeyboardScanner((code) => addByCode(code, 'lector USB'), cashOpen === true && !wo)
   async function linkPhone() {
@@ -164,7 +164,7 @@ export default function Pos() {
       const s = await api('/sales', {
         body: {
           customerId: customerId ? Number(customerId) : null, onCredit, workOrderId: wo?.id,
-          items: cart.map((l) => ({ productId: l.id, qty: l.qty, discount: l.discount })), payments, discount: globalDisc, discountReason: saleReason || cart.map((l) => l.reason).find(Boolean) || undefined, approvalToken: approval ?? undefined, idempotencyKey: saleKey.current,
+          items: cart.map((l) => ({ productId: l.id, qty: l.qty, discount: l.discount })), payments, discount: globalDisc, discountReason: saleReason || cart.map((l) => l.reason).find(Boolean) || undefined, approvalToken: approval ?? undefined, idempotencyKey: saleKey.current, allowNoStock: true,
         },
       })
       let heldCleanupFailed = false
@@ -247,7 +247,7 @@ export default function Pos() {
               onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onEnter()} /><button type="button" className="small" onClick={() => setCam('single')} title="Escanear con la cámara de esta pantalla" aria-label="Escanear con la cámara">📷</button><button type="button" className="small" onClick={linkPhone} title="Usar el celular como lector" aria-label="Usar el celular como lector">📱</button></div>
             <div className="results pos-results">
               {results.map((p) => (
-                <button key={p.id} className="tile pos-product" onClick={() => add(p)} disabled={p.kind === 'product' && p.available <= 0} aria-label={`${p.name}, ${gs(p.sell_price ?? p.price)}. Agregar al carrito`}>
+                <button key={p.id} className="tile pos-product" onClick={() => { add(p); if (p.kind === 'product' && p.available <= 0) toast(`+1 ${p.name} · sin stock, se vende igual`, true) }} aria-label={`${p.name}, ${gs(p.sell_price ?? p.price)}. Agregar al carrito`}>
                   <span className="pos-product-visual">{p.image_url ? <img src={p.image_url} alt="" loading="lazy" /> : <Icon name={productIcon(p.name, p.kind === 'service')} size={29} />}</span>
                   <span className="pos-product-body"><span className="pos-product-name">{p.name}</span><span className="pos-product-code">{p.code}</span><span className="pos-product-bottom"><strong>{gs(p.sell_price ?? p.price)}{p.on_offer && <s className="muted" style={{ marginLeft: 6, fontWeight: 400, fontSize: 12 }}>{gs(p.price)}</s>}</strong>{p.kind === 'product' && <small className={p.available <= p.min_stock ? 'low' : ''}>{p.available} disp.</small>}</span></span>
                   <span className="pos-product-add" aria-hidden="true"><Icon name="plus" size={16} /></span>
@@ -279,7 +279,7 @@ export default function Pos() {
             {cart.map((line) => (
               <div className="pos-cart-line" key={line.id}>
                 <span className="pos-cart-thumb">{line.image_url ? <img src={line.image_url} alt="" /> : <Icon name={productIcon(line.name, line.service)} size={21} />}</span>
-                <div className="pos-line-main"><b>{line.name}</b><small>{gs(line.price)} por unidad{line.promo && <span className="pill ok" style={{ marginLeft: 6 }}>{line.promo}</span>}{line.discount > 0 && <span className="pill warn" style={{ marginLeft: 6 }}>desc. {gs(line.discount)}</span>}</small><div className="pos-stepper"><button onClick={() => changeQty(line.id, -1)} disabled={!!wo} aria-label={`Restar una unidad de ${line.name}`}><Icon name="minus" size={14} /></button><span aria-label={`${line.qty} unidades`}>{line.qty}</span><button onClick={() => changeQty(line.id, 1)} disabled={!!wo || (!line.service && line.available !== null && line.qty >= line.available)} aria-label={`Sumar una unidad de ${line.name}`}><Icon name="plus" size={14} /></button></div></div>
+                <div className="pos-line-main"><b>{line.name}</b><small>{gs(line.price)} por unidad{!line.service && line.available !== null && line.available <= 0 && <span className="pill bad" style={{ marginLeft: 6 }}>sin stock</span>}{line.promo && <span className="pill ok" style={{ marginLeft: 6 }}>{line.promo}</span>}{line.discount > 0 && <span className="pill warn" style={{ marginLeft: 6 }}>desc. {gs(line.discount)}</span>}</small><div className="pos-stepper"><button onClick={() => changeQty(line.id, -1)} disabled={!!wo} aria-label={`Restar una unidad de ${line.name}`}><Icon name="minus" size={14} /></button><span aria-label={`${line.qty} unidades`}>{line.qty}</span><button onClick={() => changeQty(line.id, 1)} disabled={!!wo} aria-label={`Sumar una unidad de ${line.name}`}><Icon name="plus" size={14} /></button></div></div>
                 <div className="pos-line-end"><strong>{gs(line.price * line.qty - line.discount)}</strong><button onClick={() => setDisc({ id: line.id, name: line.name, base: line.price * line.qty, kind: 'pct', value: line.discount ? Math.round((line.discount / (line.price * line.qty)) * 100) : 0, reason: line.reason ?? '' })} aria-label={`Descuento a ${line.name}`} title="Descuento" disabled={!!wo}>%</button><button onClick={() => removeLine(line.id)} aria-label={`Quitar ${line.name}`} title="Quitar producto"><Icon name="trash" size={15} /></button></div>
               </div>
             ))}
