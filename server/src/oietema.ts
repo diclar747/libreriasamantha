@@ -129,7 +129,7 @@ export async function cancelar(cfg: OietemaConfig, cdc: string, motivo: string):
 
 // Fuente de verdad del estado en SET: el KUDE oficial muestra el sello "DOCUMENTO ANULADO — Motivo: …" solo cuando
 // el documento fue cancelado (verificado: aparece en la cancelada y no en las vigentes). null = no se pudo consultar.
-export async function kudeAnnulment(cfg: Pick<OietemaConfig, 'base'>, cdc: string): Promise<{ annulled: boolean; reason?: string } | null> {
+export async function kudeAnnulment(cfg: { base?: string } & Partial<OietemaConfig>, cdc: string): Promise<{ annulled: boolean; reason?: string } | null> {
   const t = withTimeout(15000)
   try {
     const r = await fetch(`${cfg.base ?? DEFAULT_BASE}/fact_elect/kude.php?cdc=${encodeURIComponent(cdc)}`, { signal: t.signal })
