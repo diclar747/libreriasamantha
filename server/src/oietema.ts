@@ -83,8 +83,22 @@ export async function fetchKude(cfg: OietemaConfig, cdc: string, format?: string
   const t = withTimeout(15000)
   try {
     const r = await fetch(kudeUrl(cfg, cdc, format), { signal: t.signal })
-    return await r.text()
+    return withAssetBase(await r.text(), cfg.base ?? DEFAULT_BASE)
   } finally { t.done() }
+}
+
+// El comprobante de OñeTema trae el logo (y demás recursos) con rutas RELATIVAS.
+// Nuestro frontend lo imprime escribiéndolo en una ventana en blanco (document.write),
+// que no tiene URL base, así que esas rutas no resuelven y el logo no carga.
+// Inyectamos un <base> hacia OñeTema para que las rutas relativas bajen de su servidor,
+// y forzamos https en los recursos de su dominio (evita bloqueo por contenido mixto).
+function withAssetBase(html: string, base: string): string {
+  const baseTag = `<base href="${base}/fact_elect/">`
+  let out = html.replace(/http:\/\/(www\.)?oietema\.com/gi, 'https://oietema.com')
+  if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, (m) => `${m}${baseTag}`)
+  else if (/<html[^>]*>/i.test(out)) out = out.replace(/<html[^>]*>/i, (m) => `${m}<head>${baseTag}</head>`)
+  else out = baseTag + out
+  return out
 }
 
 // ---------------------------------------------------------------- Anulación
