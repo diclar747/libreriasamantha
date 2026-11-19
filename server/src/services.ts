@@ -6,7 +6,7 @@ import { HttpError, withTx, type Db, type Tx } from './db/client.js'
 type Q = Db | Tx
 
 import { notify } from './notifications.js'
-import { cancelar, consultarRuc, emitir, type CancelResult, type FacturaPayload, type EmitResult } from './oietema.js'
+import { cancelar, consultarRuc, emitir, kudeAnnulment, type CancelResult, type FacturaPayload, type EmitResult } from './oietema.js'
 import { deleteSecret, getSecret, setSecret } from './secrets.js'
 
 export async function getSetting<T = any>(q: Q, key: string): Promise<T> {
@@ -170,9 +170,22 @@ export async function cancelAtProvider(db: Db, invoiceId: number, reason: string
   const cfg = await getSetting(db, 'invoice')
   let r: CancelResult
   try {
-    r = (cfg.mode ?? 'mock') === 'oietema'
-      ? await cancelar(await oietemaConfig(db, cfg), inv.cdc, motivo)
-      : { ok: true, message: 'Cancelación simulada (modo de prueba local)', protocol: 'SIM-' + Date.now() }
+    if ((cfg.mode ?? 'mock') !== 'oietema') r = { ok: true, message: 'Cancelación simulada (modo de prueba local)', protocol: 'SIM-' + Date.now() }
+    else {
+      const oc = await oietemaConfig(db, cfg)
+      // 1) ¿Ya está anulada en SET? (p. ej. un intento anterior que sí se procesó). Entonces solo se sincroniza, sin reenviar.
+      const before = await kudeAnnulment(oc, inv.cdc)
+      if (before?.annulled) r = { ok: true, message: 'Ya estaba cancelada en SET (verificado en el comprobante oficial).' }
+      else {
+        r = await cancelar(oc, inv.cdc, motivo)
+        // 2) Si la respuesta no es un "ok" reconocible, el comprobante oficial decide.
+        if (!r.ok) {
+          const after = await kudeAnnulment(oc, inv.cdc)
+          if (after?.annulled) r = { ...r, ok: true, message: 'Cancelación confirmada en el comprobante oficial de SET.' }
+        }
+        if (!r.ok) console.warn(`[facturación] cancelación rechazada (factura ${invoiceId}): ${r.raw ?? r.message}`)
+      }
+    }
   } catch (e: any) { r = { ok: false, message: e.message } }
   if (r.ok) {
     await db.query(

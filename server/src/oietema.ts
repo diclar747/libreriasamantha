@@ -103,18 +103,42 @@ function withAssetBase(html: string, base: string): string {
 
 // ---------------------------------------------------------------- Anulación
 // Evento de cancelación de SIFEN (cancelar_api.php). Solo facturas APROBADAS, dentro de las 48 h, motivo ≥ 5 caracteres.
-// Respuesta JSON: {"status":"ok","message":"Cancelación procesada exitosamente","protocolo":"123"} o {"status":"error","message":"..."}.
-export interface CancelResult { ok: boolean; message?: string; protocol?: string }
+// OJO: la documentación dice {"status","message","protocolo"}, pero el servidor REAL responde en español:
+//   {"estado":"error","mensaje":"El CDC proporcionado no corresponde a este emisor.","cdc":"No disponible"}
+// Se aceptan las dos formas. Como el formato de éxito no está garantizado, quien llama confirma además con el KUDE (kudeAnnulment).
+export interface CancelResult { ok: boolean; message?: string; protocol?: string; raw?: string }
+export function parseCancel(text: string, httpStatus = 200): CancelResult {
+  let j: any
+  try { j = JSON.parse(text) } catch { return { ok: false, message: text.trim().slice(0, 300) || `El facturador respondió ${httpStatus}`, raw: text.slice(0, 500) } }
+  const state = String(j.status ?? j.estado ?? '').trim().toLowerCase()
+  const message = j.message ?? j.mensaje ?? j.msg
+  const ok = /^(ok|success|exito|éxito|exitoso|aprobado|cancelado)$/.test(state)
+    || (!state && /cancelaci[oó]n (procesada|exitosa|registrada|aprobada)/i.test(String(message ?? '')))
+  const protocol = j.protocolo ?? j.protocol ?? j.nroProtocolo
+  return { ok, message, protocol: protocol != null && protocol !== '' ? String(protocol) : undefined, raw: text.slice(0, 500) }
+}
 export async function cancelar(cfg: OietemaConfig, cdc: string, motivo: string): Promise<CancelResult> {
   const base = cfg.base ?? DEFAULT_BASE
   const form = new URLSearchParams({ apiKey: cfg.apiKey, tenantId: cfg.tenant, cdc, motivo })
   const t = withTimeout(30000)
   try {
     const r = await fetch(`${base}/fact_elect/cancelar_api.php`, { method: 'POST', body: form, signal: t.signal })
-    const text = await r.text()
-    let j: any = {}
-    try { j = JSON.parse(text) } catch { return { ok: false, message: text.trim().slice(0, 300) || `El facturador respondió ${r.status}` } }
-    const ok = String(j.status).toLowerCase() === 'ok' || String(j.status).toLowerCase() === 'success'
-    return { ok, message: j.message ?? j.mensaje, protocol: j.protocolo != null ? String(j.protocolo) : undefined }
+    return parseCancel(await r.text(), r.status)
   } catch (e: any) { return { ok: false, message: `No se pudo conectar con el facturador: ${e.message}` } } finally { t.done() }
+}
+
+// Fuente de verdad del estado en SET: el KUDE oficial muestra el sello "DOCUMENTO ANULADO — Motivo: …" solo cuando
+// el documento fue cancelado (verificado: aparece en la cancelada y no en las vigentes). null = no se pudo consultar.
+export async function kudeAnnulment(cfg: Pick<OietemaConfig, 'base'>, cdc: string): Promise<{ annulled: boolean; reason?: string } | null> {
+  const t = withTimeout(15000)
+  try {
+    const r = await fetch(`${cfg.base ?? DEFAULT_BASE}/fact_elect/kude.php?cdc=${encodeURIComponent(cdc)}`, { signal: t.signal })
+    if (!r.ok) return null
+    const plain = (await r.text())
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ')
+    const m = plain.match(/DOCUMENTO\s+ANULADO(?:\s+Motivo:\s*(.{3,200}?))?(?=\s+[A-ZÁÉÍÓÚÑ]{4,}\s+[A-ZÁÉÍÓÚÑ]{3,}|$)/)
+    if (!/DOCUMENTO\s+ANULADO/.test(plain)) return { annulled: false }
+    return { annulled: true, reason: m?.[1]?.trim() }
+  } catch { return null } finally { t.done() }
 }
