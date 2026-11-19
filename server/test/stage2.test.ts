@@ -56,12 +56,16 @@ describe('Contabilidad y facturación', () => {
     expect(invs[0].number).toMatch(/^001-001-\d{7}$/)
   })
 
-  it('el balance general cuadra y la anulación genera nota de crédito y asiento inverso', async () => {
+  it('el balance general cuadra y la anulación revierte la factura (cancelación < 48 h) y el asiento', async () => {
     const sale = (await call('boss', 'GET', '/sales')).body[0]
     await call('boss', 'POST', '/cash/open', { openingFloat: 0 })
-    expect((await call('boss', 'POST', `/sales/${sale.id}/void`, { reason: 'Error de carga' })).status).toBe(200)
+    const v = await call('boss', 'POST', `/sales/${sale.id}/void`, { reason: 'Error de carga' })
+    expect(v.status).toBe(200)
+    // Dentro de las 48 h SIFEN exige el evento de cancelación (no una nota de crédito).
+    expect(v.body.fiscal.action).toBe('cancelled')
     const invs = (await call('acc', 'GET', '/invoices')).body
-    expect(invs.find((i: any) => i.kind === 'credit_note')).toMatchObject({ status: 'approved', total: 22000 })
+    expect(invs.find((i: any) => i.sale_id === sale.id && i.kind === 'invoice')).toMatchObject({ status: 'cancelled', total: 22000 })
+    expect(invs.find((i: any) => i.kind === 'credit_note')).toBeUndefined()
     const is = (await call('acc', 'GET', '/accounting/income-statement')).body
     expect(is.netIncome).toBe(0)
     const bs = (await call('acc', 'GET', '/accounting/balance-sheet')).body

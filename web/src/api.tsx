@@ -69,6 +69,7 @@ export const canSee: Record<string, string[]> = {
   '/admin': ['owner', 'admin', 'accountant'],
   '/pos': ['owner', 'admin', 'cashier', 'seller'],
   '/sales': ['owner', 'admin', 'cashier', 'seller'],
+  '/facturacion': ['owner', 'admin', 'accountant', 'cashier', 'seller'],
   '/products': ['owner', 'admin', 'cashier', 'seller', 'buyer', 'warehouse', 'accountant', 'support'],
   '/finanzas': ['owner', 'admin', 'accountant'],
   '/gastos': ['owner', 'admin', 'accountant'],

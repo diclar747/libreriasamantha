@@ -30,7 +30,7 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_at timestamptz;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_account_id int REFERENCES money_accounts(id);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_fee bigint;
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_kind_check;
-ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK (kind IN ('sale','customer_payment','refund','return'));
+ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK (kind IN ('sale','customer_payment','refund','return','debit_note')); -- se re-ejecuta en cada arranque: incluir todos los tipos (ver schema12)
 CREATE INDEX IF NOT EXISTS payments_at_idx ON payments(at);
 
 -- Cuotas de ventas a crédito y su aplicación a cobros

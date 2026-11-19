@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, gs, openKude, paymentMethodLabel, useApp } from '../api'
+import ReceptorPicker from '../components/ReceptorPicker'
 import { EmptyRow, Field, fmtDateTime, Modal, Pager, qs, Status, useAsk, useDebounced, useQuery, NumInput } from '../ui'
 
 function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
@@ -8,21 +9,32 @@ function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void
   const ask = useAsk()
   const d = useQuery<any>(`/sales/${id}`)
   const [ret, setRet] = useState<any>(null)
+  const [billing, setBilling] = useState(false)
+  const [billBusy, setBillBusy] = useState(false)
   const s = d.data
   const canVoid = ['owner', 'admin'].includes(user!.role)
   if (!s) return <Modal title="Venta" onClose={onClose}><p className="muted">Cargando…</p></Modal>
   async function doVoid() {
     const reason = await ask({ title: `Anular la venta ${s.number}`, reason: true, confirm: 'Anular venta', danger: true })
     if (!reason) return
-    try { await api(`/sales/${id}/void`, { body: { reason } }); toast('Venta anulada'); d.reload(); onChange() } catch (e: any) { toast(e.message, true) }
+    try { const r = await api(`/sales/${id}/void`, { body: { reason } }); toast(`Venta anulada. ${r.fiscal?.message ?? ''}`); d.reload(); onChange() } catch (e: any) { toast(e.message, true) }
   }
   async function doReturn() {
     const items = Object.entries(ret.qty).filter(([, n]) => Number(n) > 0).map(([saleItemId, qty]) => ({ saleItemId: Number(saleItemId), qty: Number(qty) }))
     try { const r = await api(`/sales/${id}/returns`, { body: { items, reason: ret.reason, restock: ret.restock, refundMethod: ret.method } }); toast(`Devolución registrada por ${gs(r.refunded ?? r.total ?? 0)}`); setRet(null); d.reload(); onChange() } catch (e: any) { toast(e.message, true) }
   }
+  // Factura vigente: la última no cancelada. Sin ella (o cancelada para corregir el cliente) se puede emitir una nueva.
+  const activeInv = [...(s.invoices ?? [])].reverse().find((i: any) => i.kind === 'invoice' && i.status !== 'cancelled')
+  const canBill = s.status === 'completed' && Number(s.returned_total) === 0 && !activeInv
+  async function bill(c: { id: number } | null) {
+    setBillBusy(true)
+    try { const r = await api(`/sales/${id}/invoice`, { body: { customerId: c?.id ?? null } }); toast(r.status === 'approved' ? 'Factura aprobada por SET' : `Factura ${r.status === 'rejected' ? 'rechazada' : 'pendiente'}: ${r.error ?? ''}`, r.status !== 'approved'); setBilling(false); d.reload(); onChange() }
+    catch (e: any) { toast(e.message, true) } finally { setBillBusy(false) }
+  }
   return (
     <Modal title={`Comprobante ${s.number}`} onClose={onClose} wide="xl" footer={<>
       <button onClick={() => window.print()}>Imprimir</button>
+      {canBill && <button className="primary" onClick={() => setBilling(true)}>Emitir factura</button>}
       {s.status !== 'void' && s.return_status !== 'full' && <button onClick={() => setRet({ qty: {}, reason: '', restock: true, method: 'cash' })}>Devolución</button>}
       {canVoid && s.status !== 'void' && <button className="danger" onClick={doVoid}>Anular venta</button>}</>}>
       <div className="print-area stack">
@@ -37,12 +49,17 @@ function SaleDetail({ id, onClose, onChange }: { id: number; onClose: () => void
         {s.status === 'void' && <p className="muted">Motivo de anulación: {s.void_reason}</p>}
         {!!s.invoices?.length && <div className="no-print"><h3>Facturación electrónica</h3>
           {s.invoices.map((i: any) => <div key={i.id} className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <span>{i.kind === 'invoice' ? 'Factura' : 'Nota de crédito'} <b>{i.provider_number ? `N.º ${i.provider_number}` : i.number}</b> <span className={'pill ' + (i.status === 'approved' ? 'ok' : i.status === 'rejected' ? 'bad' : 'warn')}>{i.status === 'approved' ? 'Aprobada' : i.status === 'rejected' ? 'Rechazada' : 'Pendiente'}</span>{i.error && <div className="muted">{i.error}</div>}</span>
-            {i.cdc && <button className="small" onClick={() => openKude(i.id).catch((e) => toast(e.message, true))}>Comprobante</button>}
+            <span>{i.kind === 'invoice' ? 'Factura' : i.kind === 'credit_note' ? 'Nota de crédito' : 'Nota de débito'} <b>{i.provider_number ? `N.º ${i.provider_number}` : i.number}</b> <span className={'pill ' + (i.status === 'approved' ? 'ok' : i.status === 'rejected' ? 'bad' : i.status === 'cancelled' ? '' : 'warn')}>{i.status === 'approved' ? 'Aprobada' : i.status === 'rejected' ? 'Rechazada' : i.status === 'cancelled' ? 'Cancelada' : 'Pendiente'}</span>{i.error && <div className="muted">{i.error}</div>}</span>
+            <span className="row" style={{ gap: 6 }}>{i.cdc && <button className="small" onClick={() => openKude(i.id).catch((e) => toast(e.message, true))}>Comprobante</button>}<Link className="small" to={`/facturacion?open=${i.id}`}>Ver en Facturación</Link></span>
           </div>)}
           {s.status === 'void' && s.invoices.some((i: any) => i.kind === 'credit_note') && <p className="muted" style={{ marginTop: 8 }}>La factura se anuló con una nota de crédito electrónica; el monto se descontó del movimiento de ventas.</p>}
+          {s.status === 'void' && s.invoices.some((i: any) => i.kind === 'invoice' && i.status === 'cancelled') && !s.invoices.some((i: any) => i.kind === 'credit_note') && <p className="muted" style={{ marginTop: 8 }}>La factura se canceló en SET; el monto se descontó del movimiento de ventas.</p>}
         </div>}
       </div>
+      {billing && <Modal title={`Emitir factura de la venta ${s.number}`} onClose={() => setBilling(false)} wide>
+        <p className="muted" style={{ marginTop: 0 }}>Se emite la factura electrónica por el total ({gs(s.total)}) al cliente que elijas.</p>
+        <ReceptorPicker busy={billBusy} onPick={bill} />
+      </Modal>}
       {ret && <Modal title="Devolución de mercadería" onClose={() => setRet(null)} wide footer={<><button onClick={() => setRet(null)}>Cancelar</button><button className="primary" disabled={ret.reason.length < 3 || !Object.values(ret.qty).some((n) => Number(n) > 0)} onClick={doReturn}>Registrar devolución</button></>}>
         <table><thead><tr><th>Producto</th><th className="num">Vendido</th><th className="num">Ya devuelto</th><th className="num">Devolver</th></tr></thead>
           <tbody>{s.items.map((i: any) => <tr key={i.id}><td>{i.name}</td><td className="num">{i.qty}</td><td className="num">{i.returned_qty}</td><td className="num"><NumInput min={0} max={i.qty - i.returned_qty} style={{ width: 80 }} value={ret.qty[i.id] ?? 0} onChange={(e) => setRet({ ...ret, qty: { ...ret.qty, [i.id]: Math.min(i.qty - i.returned_qty, Math.max(0, Number(e.target.value))) } })} /></td></tr>)}</tbody></table>

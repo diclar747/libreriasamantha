@@ -13,6 +13,7 @@ import { financeRoutes } from './routes/finance.js'
 import { workOrderRoutes } from './routes/workorders.js'
 import { accountingRoutes } from './accounting.js'
 import { serviceRoutes } from './services.js'
+import { invoicingRoutes } from './invoicing.js'
 import { orderAdminRoutes, printRequestRoutes, shopRoutes, webhookRoutes } from './orders.js'
 import { agentRoutes, runAgent } from './agent.js'
 import { getSetting } from './services.js'
@@ -133,6 +134,7 @@ export function buildApp(db: Db, opts: { https?: { key: Buffer; cert: Buffer } }
       workOrderRoutes(priv, db)
       accountingRoutes(priv, db)
       serviceRoutes(priv, db)
+      invoicingRoutes(priv, db)
       orderAdminRoutes(priv, db)
       onlineAdminRoutes(priv, db)
       deliveryAdminRoutes(priv, db)

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { api, gs, openKude, useApp } from '../api'
+import { Link } from 'react-router-dom'
+import { api, useApp } from '../api'
 
-type Tab = 'repl' | 'outbox' | 'invoices'
+type Tab = 'repl' | 'outbox'
 
 export default function Automation() {
   const { toast } = useApp()
@@ -12,7 +13,7 @@ export default function Automation() {
 
   const load = () => {
     setRows(null)
-    api({ repl: '/replenishments', outbox: '/outbox', invoices: '/invoices' }[tab]).then(setRows).catch((e) => { setRows([]); toast(e.message, true) })
+    api({ repl: '/replenishments', outbox: '/outbox' }[tab]).then(setRows).catch((e) => { setRows([]); toast(e.message, true) })
   }
   useEffect(() => { load() }, [tab])
   useEffect(() => { api('/suppliers').then(setSuppliers).catch(() => {}) }, [])
@@ -24,9 +25,9 @@ export default function Automation() {
 
   return (
     <>
-      <div className="head"><div><h1>Automatización</h1><span className="muted">Reposición con aprobación, mensajes por WhatsApp (Winsap) y facturas electrónicas.</span></div></div>
+      <div className="head"><div><h1>Automatización</h1><span className="muted">Reposición con aprobación y mensajes por WhatsApp (Winsap). Las facturas electrónicas están en <Link to="/facturacion">Facturación electrónica</Link>.</span></div></div>
       <div className="row" style={{ marginBottom: 14 }}>
-        {([['repl', 'Reposición'], ['outbox', 'Mensajes'], ['invoices', 'Facturas']] as [Tab, string][]).map(([k, l]) => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{l}</button>)}
+        {([['repl', 'Reposición'], ['outbox', 'Mensajes']] as [Tab, string][]).map(([k, l]) => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {!rows && <p className="muted">Cargando…</p>}
       {rows && tab === 'repl' && (
@@ -52,20 +53,6 @@ export default function Automation() {
                 <td><span className={'pill ' + (m.status === 'sent' ? 'ok' : m.status === 'failed' ? 'bad' : 'warn')}>{m.status}</span>{m.last_error && <div className="muted">{m.last_error}</div>}</td></tr>
             ))}
             {!rows.length && <tr><td colSpan={4} className="muted">Sin mensajes</td></tr>}
-          </tbody></table>
-        </div>
-      )}
-      {rows && tab === 'invoices' && (
-        <div className="card">
-          <table><thead><tr><th>Tipo</th><th>Número</th><th>Cliente</th><th className="num">Total</th><th className="num">IVA 10%</th><th>Estado</th><th>CDC</th><th /></tr></thead><tbody>
-            {rows.map((i) => (
-              <tr key={i.id}><td>{i.kind === 'invoice' ? 'Factura' : 'Nota de crédito'}</td><td><b>{i.number}</b>{i.provider_number && <div className="muted">N.º {i.provider_number}</div>}</td><td>{i.customer_name}<div className="muted">{i.customer_ruc}</div></td>
-                <td className="num">{gs(i.total)}</td><td className="num">{gs(Math.round(i.tax10 / 11))}</td>
-                <td><span className={'pill ' + (i.status === 'approved' ? 'ok' : i.status === 'rejected' ? 'bad' : 'warn')}>{i.status}</span>{i.error && <div className="muted">{i.error}</div>}</td>
-                <td className="muted" style={{ fontSize: 11, wordBreak: 'break-all', maxWidth: 160 }}>{i.cdc ?? '—'}</td>
-                <td className="num row" style={{ justifyContent: 'flex-end' }}>{i.cdc && <button onClick={() => openKude(i.id).catch((e) => toast(e.message, true))}>Comprobante</button>}{i.status !== 'approved' && <button onClick={() => act(`/invoices/${i.id}/retry`, 'Reintento hecho')}>Reintentar</button>}</td></tr>
-            ))}
-            {!rows.length && <tr><td colSpan={8} className="muted">Sin comprobantes</td></tr>}
           </tbody></table>
         </div>
       )}

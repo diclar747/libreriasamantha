@@ -6,7 +6,7 @@ import { HttpError, withTx, type Db, type Tx } from './db/client.js'
 type Q = Db | Tx
 
 import { notify } from './notifications.js'
-import { consultarRuc, emitir, fetchKude, type FacturaPayload, type EmitResult } from './oietema.js'
+import { cancelar, consultarRuc, emitir, type CancelResult, type FacturaPayload, type EmitResult } from './oietema.js'
 import { deleteSecret, getSecret, setSecret } from './secrets.js'
 
 export async function getSetting<T = any>(q: Q, key: string): Promise<T> {
@@ -28,41 +28,70 @@ export async function sifenSubmit(mode: string, doc: InvoiceDoc): Promise<SifenR
   return { status: 'approved', cdc: digits }
 }
 
-// Modo "oietema": facturación electrónica real. Arma el documento desde la fila `invoices` + sus `sale_items`.
-async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult> {
-  const apiKey = await getSecret(db, 'oietema_api_key')
+// Configuración de conexión a OñeTema (clave cifrada + tenant/establecimiento/punto).
+export async function oietemaConfig(q: Q, cfg?: any) {
+  cfg ??= await getSetting(q, 'invoice')
+  const apiKey = await getSecret(q as Db, 'oietema_api_key')
   if (!apiKey) throw new Error('Falta la clave de la API de facturación (cargala en Configuración).')
   if (!cfg.tenant || !cfg.establishment || !cfg.point) throw new Error('Falta configurar tenant, establecimiento o punto de facturación.')
-  const oietemaCfg = { apiKey, tenant: cfg.tenant, establishment: String(cfg.establishment), point: String(cfg.point), format: cfg.format || 'A4' }
+  return { apiKey, tenant: cfg.tenant, establishment: String(cfg.establishment), point: String(cfg.point), format: cfg.format || 'A4' }
+}
 
+export const IVA = (rate: unknown): 0 | 5 | 10 => (Number(rate) === 10 ? 10 : Number(rate) === 5 ? 5 : 0)
+
+// Una línea de N unidades por un importe que no se divide exacto en N se parte en dos (N-1 a precio base + 1 con el resto),
+// para que Σ(PRECIO × CANTIDAD) coincida al guaraní con el total del documento (SIFEN recalcula y rechaza diferencias).
+export function exactLines(desc: string, qty: number, amount: number, iva: 0 | 5 | 10, code?: string) {
+  const d = String(desc).slice(0, 120)
+  const q = Math.max(1, Math.round(qty) || 1)
+  const base = Math.floor(amount / q)
+  const extra = amount - base * q
+  const mk = (CANTIDAD: number, PRECIO: number) => ({ ...(code ? { CODIGO: code } : {}), DESCRIPCION: d, CANTIDAD, PRECIO, IVA: iva })
+  if (extra === 0) return [mk(q, base)]
+  return q === 1 ? [mk(1, amount)] : [mk(q - 1, base), mk(1, base + extra)]
+}
+
+// Líneas guardadas en invoices.lines: [{ description, qty, amount, tax_rate, code? }] (amount = importe de la línea, IVA incluido).
+export interface DocLine { description: string; qty: number; amount: number; tax_rate: number; code?: string }
+
+// Ítems de la venta con el descuento global prorrateado (igual que saleTax) para que la suma dé exactamente `total`.
+async function saleLines(q: Q, saleId: number, total: number): Promise<DocLine[]> {
+  const { rows: items } = await q.query('SELECT si.name, si.qty, si.total, si.tax_rate, p.code FROM sale_items si LEFT JOIN products p ON p.id = si.product_id WHERE si.sale_id = $1 ORDER BY si.id', [saleId])
+  const subtotal = items.reduce((s: number, it: any) => s + Number(it.total), 0)
+  const disc = subtotal - Number(total)
+  let rest = disc
+  return items.map((it: any, idx: number) => {
+    const share = idx === items.length - 1 ? rest : Math.round((disc * Number(it.total)) / (subtotal || 1))
+    rest -= share
+    return { description: it.name, qty: Number(it.qty) || 1, amount: Number(it.total) - share, tax_rate: Number(it.tax_rate), code: it.code ?? undefined }
+  })
+}
+
+// Modo "oietema": facturación electrónica real. Arma el documento desde la fila `invoices` (+ ítems propios o los de la venta).
+async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult> {
+  const oietemaCfg = await oietemaConfig(db, cfg)
   const { rows: sr } = await db.query('SELECT credit_amount, customer_id FROM sales WHERE id = $1', [inv.sale_id])
   const sale = sr[0] ?? {}
-  const { rows: items } = await db.query('SELECT name, qty, unit_price, total, tax_rate FROM sale_items WHERE sale_id = $1 ORDER BY id', [inv.sale_id])
+  const customerId = inv.customer_id ?? sale.customer_id ?? null
 
   // Receptor. Sin RUC → consumidor final (RUC "XX", no contribuyente).
   let RUC = 'XX', RAZON_SOCIAL = inv.customer_name || 'Sin Nombre', PERSONA: 'FISICA' | 'JURIDICA' = 'FISICA', CONTRIBUYENTE: 'SI' | 'NO' = 'NO'
   // Correo del receptor: OñeTema le envía la factura (KUDE) por correo. Sale del cliente, o del pedido online si no hay cliente.
-  const { rows: cu } = sale.customer_id ? await db.query('SELECT doc_type, taxpayer, persona, email FROM customers WHERE id = $1', [sale.customer_id]) : { rows: [] as any[] }
+  const { rows: cu } = customerId ? await db.query('SELECT doc_type, taxpayer, persona, email FROM customers WHERE id = $1', [customerId]) : { rows: [] as any[] }
   const c = cu[0]
   let email: string | null = c?.email || null
-  if (!email) { const { rows: o } = await db.query('SELECT email FROM orders WHERE sale_id = $1 LIMIT 1', [inv.sale_id]); email = o[0]?.email || null }
+  if (!email && inv.sale_id) { const { rows: o } = await db.query('SELECT email FROM orders WHERE sale_id = $1 LIMIT 1', [inv.sale_id]); email = o[0]?.email || null }
   if (inv.customer_ruc) {
     RUC = String(inv.customer_ruc)
     CONTRIBUYENTE = c?.taxpayer || c?.doc_type === 'ruc' ? 'SI' : 'NO'
     PERSONA = c?.persona === 'JURIDICA' ? 'JURIDICA' : 'FISICA'
   }
 
-  // Ítems: el descuento global se prorratea igual que en la contabilidad (saleTax) para que la suma coincida con el total.
-  const subtotal = items.reduce((s: number, it: any) => s + Number(it.total), 0)
-  const globalDisc = Math.max(0, subtotal - Number(inv.total))
-  let rest = globalDisc
-  const ITEMS = items.map((it: any, idx: number) => {
-    const share = idx === items.length - 1 ? rest : Math.round((globalDisc * Number(it.total)) / (subtotal || 1))
-    rest -= share
-    const net = Number(it.total) - share
-    const qty = Number(it.qty) || 1
-    return { DESCRIPCION: String(it.name).slice(0, 120), CANTIDAD: qty, PRECIO: Math.round(net / qty), IVA: (it.tax_rate === 10 ? 10 : it.tax_rate === 5 ? 5 : 0) as 0 | 5 | 10 }
-  })
+  // Ítems: los propios de la nota (devolución parcial, descuento, interés…) o los de la venta prorrateados al total.
+  const lines: DocLine[] = Array.isArray(inv.lines) && inv.lines.length ? inv.lines : await saleLines(db, inv.sale_id, Number(inv.total))
+  const ITEMS = lines.flatMap((l) => exactLines(l.description, l.qty, Number(l.amount), IVA(l.tax_rate), l.code))
+  const sum = ITEMS.reduce((s, i) => s + i.PRECIO * i.CANTIDAD, 0)
+  if (sum !== Number(inv.total)) throw new Error(`Los ítems suman ${sum} y el documento ${inv.total}: no se envía para no generar un comprobante con importe incorrecto.`)
 
   const payload: FacturaPayload = {
     RUC, RAZON_SOCIAL, PERSONA, CONTRIBUYENTE,
@@ -71,31 +100,37 @@ async function emitirElectronica(db: Db, inv: any, cfg: any): Promise<EmitResult
     ...(email ? { EMAIL: email } : {}),
     ITEMS,
   }
-  if (inv.kind === 'credit_note') {
-    payload.TIPO_DOCUMENTO = 'NOTA_DE_CREDITO'
-    payload.MOTIVO = '1' // 1 = Devolución y ajuste de precios
+  if (inv.kind === 'credit_note' || inv.kind === 'debit_note') {
+    payload.TIPO_DOCUMENTO = inv.kind === 'credit_note' ? 'NOTA_DE_CREDITO' : 'NOTA_DE_DEBITO'
+    payload.MOTIVO = Number(inv.motive) || (inv.kind === 'credit_note' ? 1 : 8) // tabla E401: 1 = Devolución y ajuste de precios, 8 = Ajuste de precio
     const orig = inv.related_invoice_id ? (await db.query('SELECT cdc FROM invoices WHERE id = $1', [inv.related_invoice_id])).rows[0] : null
-    if (orig?.cdc) payload.FACTURA_CDC = orig.cdc
+    if (!orig?.cdc) throw new Error('La factura original no tiene CDC aprobado: no se puede emitir la nota.')
+    payload.FACTURA_CDC = orig.cdc
   }
   return emitir(oietemaCfg, payload)
 }
 
-export async function nextInvoiceNumber(tx: Tx, kind: 'invoice' | 'credit_note') {
+export type DocKind = 'invoice' | 'credit_note' | 'debit_note'
+const SEQ: Record<DocKind, string> = { invoice: 'invoice_number_seq', credit_note: 'credit_note_number_seq', debit_note: 'debit_note_number_seq' }
+
+export async function nextInvoiceNumber(tx: Tx, kind: DocKind) {
   const cfg = await getSetting(tx, 'invoice')
-  const { rows } = await tx.query(`SELECT nextval('${kind === 'invoice' ? 'invoice_number_seq' : 'credit_note_number_seq'}') AS n`)
+  const { rows } = await tx.query(`SELECT nextval('${SEQ[kind]}') AS n`)
   return `${cfg.establishment}-${cfg.point}-${String(rows[0].n).padStart(7, '0')}`
 }
 
 export async function createInvoice(tx: Tx, o: {
-  saleId: number; kind?: 'invoice' | 'credit_note'; relatedId?: number
+  saleId: number; kind?: DocKind; relatedId?: number
   customerName: string; customerRuc: string | null; total: number; tax10: number; tax5: number; exempt: number
+  customerId?: number | null; motive?: number; reason?: string; lines?: DocLine[]; returnId?: number; userId?: number
 }) {
   const kind = o.kind ?? 'invoice'
   const number = await nextInvoiceNumber(tx, kind)
   const { rows } = await tx.query(
-    `INSERT INTO invoices (sale_id, kind, number, related_invoice_id, customer_name, customer_ruc, total, tax10, tax5, exempt)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-    [o.saleId, kind, number, o.relatedId ?? null, o.customerName, o.customerRuc, o.total, o.tax10, o.tax5, o.exempt])
+    `INSERT INTO invoices (sale_id, kind, number, related_invoice_id, customer_name, customer_ruc, total, tax10, tax5, exempt, customer_id, motive, reason, lines, return_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+    [o.saleId, kind, number, o.relatedId ?? null, o.customerName, o.customerRuc, o.total, o.tax10, o.tax5, o.exempt,
+      o.customerId ?? null, o.motive ?? null, o.reason ?? null, o.lines ? JSON.stringify(o.lines) : null, o.returnId ?? null, o.userId ?? null])
   return rows[0].id as number
 }
 
@@ -103,16 +138,50 @@ export async function createInvoice(tx: Tx, o: {
 export async function submitInvoice(db: Db, id: number) {
   const { rows } = await db.query('SELECT * FROM invoices WHERE id = $1', [id])
   const inv = rows[0]
-  if (!inv || inv.status === 'approved') return inv
+  if (!inv || inv.status === 'approved' || inv.status === 'cancelled') return inv
   const cfg = await getSetting(db, 'invoice')
   const mode = cfg.mode ?? 'mock'
+  const label = inv.kind === 'invoice' ? 'Factura' : inv.kind === 'credit_note' ? 'Nota de crédito' : 'Nota de débito'
   try {
     const r = mode === 'oietema' ? await emitirElectronica(db, inv, cfg) : await sifenSubmit(mode, inv)
-    await db.query('UPDATE invoices SET status = $2, cdc = $3, provider_number = COALESCE($4, provider_number), error = $5, attempts = attempts + 1 WHERE id = $1', [id, r.status, r.cdc ?? null, r.number ?? null, r.error ?? null])
-    if (r.status === 'rejected') await notify(db, { type: 'invoice_rejected', title: `Factura rechazada ${inv.number}`, body: r.error ?? 'Revisá los datos del receptor.', link: '/automation', dedupeKey: `inv-rej:${id}:${inv.attempts}` }).catch(() => {})
+    await db.query(
+      `UPDATE invoices SET status = $2, cdc = $3, provider_number = COALESCE($4, provider_number), error = $5, attempts = attempts + 1,
+         approved_at = CASE WHEN $2 = 'approved' THEN now() ELSE approved_at END WHERE id = $1`,
+      [id, r.status, r.cdc ?? null, r.number ?? null, r.error ?? null])
+    if (r.status === 'rejected') await notify(db, { type: 'invoice_rejected', title: `${label} rechazada ${inv.number}`, body: r.error ?? 'Revisá los datos del receptor.', link: `/facturacion?open=${id}`, dedupeKey: `inv-rej:${id}:${inv.attempts}` }).catch(() => {})
   } catch (e: any) {
     await db.query(`UPDATE invoices SET status = 'pending', error = $2, attempts = attempts + 1 WHERE id = $1`, [id, e.message])
   }
+}
+
+// ---------------------------------------------------------------- Cancelación (evento SIFEN)
+// SIFEN permite cancelar un documento aprobado dentro de las 48 h; después solo vale una nota de crédito.
+export const CANCEL_HOURS = 48
+export const cancelDeadline = (inv: { approved_at?: string | Date | null; created_at: string | Date }) =>
+  new Date(inv.approved_at ?? inv.created_at).getTime() + CANCEL_HOURS * 3600_000
+
+export async function cancelAtProvider(db: Db, invoiceId: number, reason: string, userId: number): Promise<CancelResult> {
+  const { rows } = await db.query('SELECT * FROM invoices WHERE id = $1', [invoiceId])
+  const inv = rows[0]
+  if (!inv) return { ok: false, message: 'Comprobante no encontrado' }
+  if (inv.status !== 'approved' || !inv.cdc) return { ok: false, message: 'Solo se cancelan documentos aprobados (con CDC).' }
+  if (Date.now() >= cancelDeadline(inv)) return { ok: false, message: `Pasaron más de ${CANCEL_HOURS} h desde la aprobación: corresponde una nota de crédito.` }
+  const motivo = (reason.trim().length >= 5 ? reason.trim() : `Cancelación: ${reason.trim()}`).slice(0, 500) // SIFEN pide ≥ 5 caracteres
+  const cfg = await getSetting(db, 'invoice')
+  let r: CancelResult
+  try {
+    r = (cfg.mode ?? 'mock') === 'oietema'
+      ? await cancelar(await oietemaConfig(db, cfg), inv.cdc, motivo)
+      : { ok: true, message: 'Cancelación simulada (modo de prueba local)', protocol: 'SIM-' + Date.now() }
+  } catch (e: any) { r = { ok: false, message: e.message } }
+  if (r.ok) {
+    await db.query(
+      `UPDATE invoices SET status = 'cancelled', cancelled_at = now(), cancelled_by = $2, cancel_reason = $3, cancel_protocol = $4, error = NULL WHERE id = $1`,
+      [invoiceId, userId, motivo, r.protocol ?? null])
+    await db.query(`INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1,'invoice.cancel','invoice',$2,$3)`,
+      [userId, invoiceId, JSON.stringify({ reason: motivo, protocol: r.protocol ?? null })])
+  }
+  return r
 }
 
 // ---------------------------------------------------------------- Mensajería (Winsap)
@@ -196,31 +265,7 @@ export function serviceRoutes(app: FastifyInstance, db: Db) {
     return next
   })
 
-  app.get('/invoices', async (req) => {
-    requirePerm(req, 'invoices.view')
-    return (await db.query('SELECT * FROM invoices ORDER BY id DESC LIMIT 200')).rows
-  })
-  app.post('/invoices/:id/retry', async (req) => {
-    requirePerm(req, 'invoices.view')
-    const id = Number((req.params as any).id)
-    await db.query(`UPDATE invoices SET status = 'pending' WHERE id = $1 AND status = 'rejected'`, [id])
-    await submitInvoice(db, id)
-    return (await db.query('SELECT * FROM invoices WHERE id = $1', [id])).rows[0]
-  })
-
-  // KUDE: el comprobante imprimible (HTML) del proveedor. El servidor lo trae con el CDC para no exponer la clave ni chocar con CORS.
-  app.get('/invoices/:id/kude', async (req, reply) => {
-    requirePerm(req, 'invoices.view')
-    const id = Number((req.params as any).id)
-    const { rows } = await db.query('SELECT cdc FROM invoices WHERE id = $1', [id])
-    if (!rows[0]) throw new HttpError(404, 'Factura no encontrada')
-    if (!rows[0].cdc) throw new HttpError(409, 'La factura todavía no tiene CDC (no fue aprobada).')
-    const cfg = await getSetting<any>(db, 'invoice')
-    const apiKey = (await getSecret(db, 'oietema_api_key')) ?? ''
-    const fmt = ((req.query as any).formato as string) || cfg.format || 'A4'
-    const html = await fetchKude({ apiKey, tenant: cfg.tenant, establishment: String(cfg.establishment ?? ''), point: String(cfg.point ?? ''), format: cfg.format }, rows[0].cdc, fmt)
-    return reply.header('content-type', 'text/html; charset=utf-8').send(html)
-  })
+  // Las rutas de comprobantes (/invoices…) viven en invoicing.ts.
 
   // Clave de la API de facturación: se guarda cifrada (como la clave de IA); nunca se devuelve en claro.
   app.get('/invoice/status', async (req) => {

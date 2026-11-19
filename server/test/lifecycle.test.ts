@@ -112,10 +112,14 @@ describe('Jornada completa de la librería: los números tienen que cuadrar', ()
     const close = ok(await call('cash', 'POST', '/cash/close', { counted: cur.expectedCash }))
     expect(close.difference).toBe(0)
 
-    // Cada venta completada tiene su factura aprobada y cada anulación su nota de crédito
+    // Cada venta completada tiene su factura aprobada y cada anulación revierte la suya: dentro de las 48 h con el
+    // evento de cancelación de SIFEN (sin nota de crédito), después con nota de crédito.
     const unmatched = (await db.query(`SELECT s.number FROM sales s WHERE s.status = 'completed' AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.sale_id = s.id AND i.kind = 'invoice' AND i.status = 'approved')`)).rows
     expect(unmatched).toEqual([])
-    expect((await db.query(`SELECT COUNT(*)::int AS n FROM invoices WHERE kind = 'credit_note' AND status = 'approved'`)).rows[0].n).toBe(1)
+    const voided = (await db.query(`SELECT i.status FROM sales s JOIN invoices i ON i.sale_id = s.id AND i.kind = 'invoice' WHERE s.status = 'void'`)).rows
+    expect(voided.length).toBeGreaterThan(0)
+    expect(voided.every((r) => r.status === 'cancelled')).toBe(true)
+    expect((await db.query(`SELECT COUNT(*)::int AS n FROM invoices WHERE kind = 'credit_note' AND status = 'approved'`)).rows[0].n).toBe(0)
 
     // Estado final de los pedidos web
     const states = (await db.query('SELECT number, status, payment_status, reservation_active FROM orders ORDER BY id')).rows

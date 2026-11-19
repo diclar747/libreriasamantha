@@ -25,6 +25,7 @@ import Orders from './pages/Orders'
 import Delivery from './pages/Delivery'
 import Accounting from './pages/Accounting'
 import Automation from './pages/Automation'
+import Invoicing from './pages/Invoicing'
 import Campaigns from './pages/Campaigns'
 import Settings from './pages/Settings'
 import Prompts from './pages/Prompts'
@@ -43,7 +44,7 @@ import './storefront.css'
 type Item = [path: string, label: string, icon: IconName]
 const NAV: { group: string; items: Item[] }[] = [
   { group: '', items: [['/admin', 'Panel', 'home']] },
-  { group: 'Venta', items: [['/pos', 'Punto de venta', 'pos'], ['/sales', 'Ventas', 'receipt'], ['/cash', 'Caja', 'wallet'], ['/orders', 'Pedidos en línea', 'bag'], ['/delivery', 'Delivery', 'truck'], ['/workorders', 'Impresiones', 'print']] },
+  { group: 'Venta', items: [['/pos', 'Punto de venta', 'pos'], ['/sales', 'Ventas', 'receipt'], ['/facturacion', 'Facturación electrónica', 'invoice'], ['/cash', 'Caja', 'wallet'], ['/orders', 'Pedidos en línea', 'bag'], ['/delivery', 'Delivery', 'truck'], ['/workorders', 'Impresiones', 'print']] },
   { group: 'Dinero', items: [['/finanzas', 'Dinero y cuentas', 'transfer'], ['/gastos', 'Gastos', 'receipt'], ['/reports', 'Reportes', 'receipt']] },
   { group: 'Inventario', items: [['/products', 'Productos e inventario', 'box'], ['/inventory', 'Conteo de inventario', 'camera'], ['/purchases', 'Compras', 'truck'], ['/suppliers', 'Proveedores', 'factory']] },
   { group: 'Gestión', items: [['/customers', 'Clientes y crédito', 'users'], ['/accounting', 'Contabilidad', 'book'], ['/automation', 'Automatización', 'bolt'], ['/campaigns', 'Campañas push', 'bell'], ['/prompts', 'Asistente con IA', 'sparkle'], ['/settings', 'Configuración', 'gear']] },
@@ -53,7 +54,7 @@ const SHORT: Record<string, string> = { '/admin': 'Inicio', '/pos': 'Vender', '/
 const BOTTOM_PRIORITY = ['/admin', '/pos', '/orders', '/products', '/purchases', '/sales', '/cash', '/customers']
 
 const PAGES: [string, React.ReactElement][] = [
-  ['/pos', <Pos />], ['/sales', <Sales />], ['/products', <Products />], ['/purchases', <Purchases />], ['/suppliers', <Suppliers />],
+  ['/pos', <Pos />], ['/sales', <Sales />], ['/facturacion', <Invoicing />], ['/products', <Products />], ['/purchases', <Purchases />], ['/suppliers', <Suppliers />],
   ['/customers', <Customers />], ['/cash', <Cash />], ['/workorders', <WorkOrders />], ['/orders', <Orders />], ['/delivery', <Delivery />],
   ['/accounting', <Accounting />], ['/finanzas', <Finance />], ['/gastos', <ExpensesPage />], ['/reports', <Reports />], ['/inventory', <Inventory />], ['/automation', <Automation />], ['/campaigns', <Campaigns />], ['/prompts', <Prompts />], ['/settings', <Settings />],
 ]

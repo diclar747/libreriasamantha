@@ -169,8 +169,8 @@ export async function cashSessionsReport(ctx: Ctx): Promise<ReportResult> {
        SELECT mv.session_id,
          COALESCE(SUM(mv.account_delta) FILTER (WHERE a.kind = 'cash' AND mv.kind <> 'cash_difference' AND COALESCE(mv.reference, '') NOT LIKE 'close:%' AND mv.account_delta > 0), 0) AS cash_in,
          COALESCE(-SUM(mv.account_delta) FILTER (WHERE a.kind = 'cash' AND mv.kind <> 'cash_difference' AND COALESCE(mv.reference, '') NOT LIKE 'close:%' AND mv.account_delta < 0), 0) AS cash_out,
-         COALESCE(SUM(mv.amount) FILTER (WHERE mv.kind IN ('sale_payment','customer_payment') AND mv.method = 'cash'), 0) AS cash_sales,
-         COALESCE(SUM(mv.amount) FILTER (WHERE mv.kind IN ('sale_payment','customer_payment') AND mv.method <> 'cash'), 0) AS other_methods,
+         COALESCE(SUM(mv.amount) FILTER (WHERE mv.kind IN ('sale_payment','customer_payment','debit_note') AND mv.method = 'cash'), 0) AS cash_sales,
+         COALESCE(SUM(mv.amount) FILTER (WHERE mv.kind IN ('sale_payment','customer_payment','debit_note') AND mv.method <> 'cash'), 0) AS other_methods,
          COALESCE(-SUM(mv.amount) FILTER (WHERE mv.kind IN ('refund','sale_return')), 0) AS refunds
        FROM mv LEFT JOIN money_accounts a ON a.id = mv.account_id WHERE NOT mv.voided AND mv.session_id IS NOT NULL GROUP BY mv.session_id)
      SELECT cs.id, u.name AS cashier, cs.shift, cs.opened_at, cs.closed_at, cs.status, cs.opening_float, cs.expected_cash, cs.counted_cash, cs.diff_status, cs.deposit_amount, cs.reserve_amount, cs.reopen_count,

@@ -3,6 +3,7 @@ const P: Record<string, string> = {
   home: 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10',
   pos: 'M4 4h16v6H4zM4 14h7v6H4zM15 14h5v2h-5zM15 18h5v2h-5z',
   receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6',
+  invoice: 'M6 3h9l4 4v14H6zM14 3v5h5M9 14l2 2 4-4',
   wallet: 'M3 7h16a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2zM3 7l2-3h12M16 14h3',
   bag: 'M5 8h14l-1 12H6zM9 8a3 3 0 016 0',
   print: 'M7 9V3h10v6M7 17H4v-6h16v6h-3M7 14h10v7H7z',

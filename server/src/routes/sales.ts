@@ -6,7 +6,8 @@ import { HttpError, withTx, type Db, type Tx } from '../db/client.js'
 import { postReturn, postSale, reverse, saleTax } from '../accounting.js'
 import { createInstallments, creditSaleDebt } from '../credit.js'
 import { defaultAccount, estimateFee, needsSettlement } from '../finance.js'
-import { checkReplenishment, createInvoice, getSetting, submitInvoice } from '../services.js'
+import { cancelAtProvider, cancelDeadline, checkReplenishment, createInvoice, getSetting, submitInvoice } from '../services.js'
+import { notify } from '../notifications.js'
 import { moveStock } from '../stock.js'
 import { effectivePrice, netCost, vatOf } from '../pricing.js'
 
@@ -66,14 +67,14 @@ export function normalizePayment(p: z.infer<typeof paymentInput>) {
 }
 
 export async function insertPayment(tx: Tx, o: {
-  kind: 'sale' | 'customer_payment' | 'refund' | 'return'
+  kind: 'sale' | 'customer_payment' | 'refund' | 'return' | 'debit_note'
   saleId?: number | null; customerId?: number | null; sessionId?: number | null; sessionAccountId?: number | null; userId: number
   method: string; amount: number; details?: Record<string, any>; reference?: string | null
 }) {
   const details = o.details ?? {}
   const account = o.method === 'cash' ? (o.sessionAccountId ?? (await defaultAccount(tx, 'cash')))
     : o.method === 'transfer' ? (details.accountId ? Number(details.accountId) : await defaultAccount(tx, 'bank')) : null
-  const positive = o.kind === 'sale' || o.kind === 'customer_payment'
+  const positive = o.kind === 'sale' || o.kind === 'customer_payment' || o.kind === 'debit_note'
   const fee = positive && needsSettlement(o.method) ? await estimateFee(tx, o.method, details, o.amount) : 0
   const { rows } = await tx.query(
     `INSERT INTO payments (kind, sale_id, customer_id, session_id, method, amount, account_id, details, reference, fee, settlement_status, user_id)
@@ -83,18 +84,32 @@ export async function insertPayment(tx: Tx, o: {
   return rows[0].id as number
 }
 
-export async function voidSale(db: Db, id: number, user: { id: number }, reason: string) {
+// Condiciones para poder anular una venta (se usan también ANTES de cancelar la factura en SET, para no dejar
+// una factura cancelada con la venta vigente por un problema que se podía prever).
+export async function checkVoidable(q: Db | Tx, id: number, userId: number) {
+  const { rows } = await q.query('SELECT * FROM sales WHERE id = $1', [id])
+  const s = rows[0]
+  if (!s) throw new HttpError(404, 'Venta no encontrada')
+  if (s.status === 'void') throw new HttpError(409, 'La venta ya está anulada')
+  if (Number(s.returned_total) > 0) throw new HttpError(409, 'La venta tiene devoluciones o notas de crédito registradas: ya no puede anularse')
+  const { rows: nd } = await q.query(`SELECT 1 FROM invoices WHERE sale_id = $1 AND kind = 'debit_note' AND status IN ('approved','pending') LIMIT 1`, [id])
+  if (nd[0]) throw new HttpError(409, 'La venta tiene una nota de débito: emití una nota de crédito por ese importe en Facturación en lugar de anular la venta')
+  const { rows: cash } = await q.query(`SELECT 1 FROM payments WHERE sale_id = $1 AND kind = 'sale' AND method = 'cash' LIMIT 1`, [id])
+  if (cash[0] && !(await openSession(q, userId))) throw new HttpError(409, 'Abrí la caja para devolver el efectivo')
+  return s
+}
+
+// `fiscal: false` = la factura ya se canceló en SET desde Facturación: solo se revierte la venta (dinero, stock, crédito, asiento).
+export async function voidSale(db: Db, id: number, user: { id: number }, reason: string, opts: { fiscal?: boolean } = {}) {
   let creditNoteId: number | null = null
+  let cancelInvoiceId: number | null = null
   const out = await withTx(db, async (tx) => {
     const { rows } = await tx.query('SELECT * FROM sales WHERE id = $1 FOR UPDATE', [id])
     const s = rows[0]
-    if (!s) throw new HttpError(404, 'Venta no encontrada')
-    if (s.status === 'void') throw new HttpError(409, 'La venta ya está anulada')
-    if (Number(s.returned_total) > 0) throw new HttpError(409, 'La venta tiene devoluciones registradas: ya no puede anularse')
+    await checkVoidable(tx, id, user.id)
     const session = await openSession(tx, user.id)
     const { rows: pays } = await tx.query(
       `SELECT method, account_id, SUM(amount) AS amount FROM payments WHERE sale_id = $1 AND kind = 'sale' GROUP BY method, account_id`, [id])
-    if (pays.some((p) => p.method === 'cash') && !session) throw new HttpError(409, 'Abrí la caja para devolver el efectivo')
     const { rows: items } = await tx.query('SELECT si.*, p.kind FROM sale_items si JOIN products p ON p.id = si.product_id WHERE si.sale_id = $1 ORDER BY si.product_id', [id])
     for (const it of items) {
       if (it.kind !== 'product') continue
@@ -115,22 +130,58 @@ export async function voidSale(db: Db, id: number, user: { id: number }, reason:
     }
     await tx.query(`UPDATE sales SET status = 'void', void_reason = $2, voided_by = $3 WHERE id = $1`, [id, reason, user.id])
     await reverse(tx, 'sale', id, `Anulación ${s.number}: ${reason}`, user.id)
-    const { rows: inv } = await tx.query(`SELECT * FROM invoices WHERE sale_id = $1 AND kind = 'invoice'`, [id])
-    if (inv[0]) {
+    // Reversión fiscal de la factura vigente:
+    //  - nunca aprobada (pendiente/rechazada) → se cancela localmente, así no se reintenta una factura de una venta anulada;
+    //  - aprobada hace menos de 48 h y sin notas → evento de CANCELACIÓN en SIFEN (después del commit);
+    //  - aprobada hace más de 48 h → NOTA DE CRÉDITO por el total (motivo 1, la forma que exige SIFEN pasado el plazo).
+    const inv = opts.fiscal === false ? undefined : await activeInvoice(tx, id)
+    if (inv && inv.status !== 'approved') {
+      await tx.query(`UPDATE invoices SET status = 'cancelled', cancelled_at = now(), cancelled_by = $2, cancel_reason = $3 WHERE id = $1`,
+        [inv.id, user.id, `Venta anulada antes de aprobarse la factura: ${reason}`])
+    } else if (inv && Date.now() < cancelDeadline(inv) && !(await hasNotes(tx, inv.id))) {
+      cancelInvoiceId = inv.id
+    } else if (inv) {
       creditNoteId = await createInvoice(tx, {
-        saleId: id, kind: 'credit_note', relatedId: inv[0].id, customerName: inv[0].customer_name, customerRuc: inv[0].customer_ruc,
-        total: inv[0].total, tax10: inv[0].tax10, tax5: inv[0].tax5, exempt: inv[0].exempt,
+        saleId: id, kind: 'credit_note', relatedId: inv.id, customerName: inv.customer_name, customerRuc: inv.customer_ruc, customerId: inv.customer_id,
+        total: inv.total, tax10: inv.tax10, tax5: inv.tax5, exempt: inv.exempt, motive: 1, reason: `Anulación de la venta: ${reason}`, userId: user.id,
       })
     }
     await tx.query(`INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1,'sale.void','sale',$2,$3)`,
       [user.id, id, JSON.stringify({ reason })])
     return { status: 'void' }
   })
-  if (creditNoteId) await submitInvoice(db, creditNoteId)
-  return out
+  let fiscal: { action: 'cancelled' | 'credit_note' | 'none'; message?: string } = { action: 'none' }
+  if (cancelInvoiceId) {
+    const r = await cancelAtProvider(db, cancelInvoiceId, reason, user.id)
+    if (r.ok) fiscal = { action: 'cancelled', message: 'La factura se canceló en SET.' }
+    else {
+      // SET no aceptó la cancelación: se revierte con nota de crédito, que siempre es válida.
+      const inv = (await db.query('SELECT * FROM invoices WHERE id = $1', [cancelInvoiceId])).rows[0]
+      creditNoteId = await withTx(db, (tx) => createInvoice(tx, {
+        saleId: id, kind: 'credit_note', relatedId: inv.id, customerName: inv.customer_name, customerRuc: inv.customer_ruc, customerId: inv.customer_id,
+        total: inv.total, tax10: inv.tax10, tax5: inv.tax5, exempt: inv.exempt, motive: 1, reason: `Anulación de la venta: ${reason}`, userId: user.id,
+      }))
+      fiscal = { action: 'credit_note', message: `SET no aceptó la cancelación (${r.message ?? 'sin detalle'}); se emitió una nota de crédito.` }
+    }
+  }
+  if (creditNoteId) {
+    await submitInvoice(db, creditNoteId)
+    if (fiscal.action === 'none') fiscal = { action: 'credit_note', message: 'Se emitió una nota de crédito por el total.' }
+  }
+  return { ...out, fiscal }
 }
 
-async function openSession(tx: Tx | Db, userId: number) {
+// Factura vigente de una venta (la última no cancelada).
+export async function activeInvoice(q: Db | Tx, saleId: number) {
+  const { rows } = await q.query(`SELECT * FROM invoices WHERE sale_id = $1 AND kind = 'invoice' AND status <> 'cancelled' ORDER BY id DESC LIMIT 1`, [saleId])
+  return rows[0] as any | undefined
+}
+async function hasNotes(q: Db | Tx, invoiceId: number) {
+  const { rows } = await q.query(`SELECT 1 FROM invoices WHERE related_invoice_id = $1 AND status IN ('approved','pending') LIMIT 1`, [invoiceId])
+  return !!rows[0]
+}
+
+export async function openSession(tx: Tx | Db, userId: number) {
   const { rows } = await tx.query(`SELECT * FROM cash_sessions WHERE user_id = $1 AND status = 'open'`, [userId])
   return rows[0] as { id: number; opening_float: number; account_id: number | null } | undefined
 }
@@ -141,6 +192,7 @@ const returnBody = z.object({
   restock: z.boolean().default(true),
   refundMethod: z.enum(['cash', 'transfer', 'card', 'qr']).default('cash'),
   accountId: z.number().int().nullish(),
+  motive: z.number().int().min(1).max(5).optional(), // motivo SIFEN de la nota de crédito (por defecto 2 = Devolución)
 })
 
 // Devolución de una venta (mostrador o tienda): la usan el POS y las devoluciones de pedidos en línea.
@@ -205,10 +257,18 @@ export async function processSaleReturn(db: Db, user: { id: number }, id: number
         items: picked.map((p) => ({ amount: p.amount, tax_rate: p.it.tax_rate, qty: p.qty, cost: Number(p.it.unit_cost), kind: p.it.kind })),
         settle: { applied, refunds: refund > 0 ? [{ method: b.refundMethod, amount: refund }] : [] },
       })
-      const { rows: inv } = await tx.query(`SELECT * FROM invoices WHERE sale_id = $1 AND kind = 'invoice'`, [id])
-      if (inv[0]) {
+      const inv = await activeInvoice(tx, id)
+      if (inv && inv.status === 'approved') {
         const t = saleTax(picked.map((p) => ({ total: p.amount, tax_rate: p.it.tax_rate })), 0)
-        creditNoteId = await createInvoice(tx, { saleId: id, kind: 'credit_note', relatedId: inv[0].id, customerName: inv[0].customer_name, customerRuc: inv[0].customer_ruc, total: R, tax10: t.tax10, tax5: t.tax5, exempt: t.exempt })
+        creditNoteId = await createInvoice(tx, {
+          saleId: id, kind: 'credit_note', relatedId: inv.id, customerName: inv.customer_name, customerRuc: inv.customer_ruc, customerId: inv.customer_id,
+          total: R, tax10: t.tax10, tax5: t.tax5, exempt: t.exempt, motive: b.motive ?? 2, reason: b.reason, returnId, userId: user.id,
+          // Solo lo devuelto (no todos los ítems de la venta): así el comprobante muestra lo que realmente volvió.
+          lines: picked.map((p) => ({ description: p.it.name, qty: p.qty, amount: p.amount, tax_rate: Number(p.it.tax_rate) })),
+        })
+      } else if (inv) {
+        // La factura todavía no fue aprobada: no se puede acreditar contra ella. Se avisa para resolverlo en Facturación.
+        await notify(tx, { type: 'invoice_rejected', title: `Devolución ${number} sin nota de crédito`, body: `La factura ${inv.number} no está aprobada; corregila o volvé a emitirla en Facturación.`, link: `/facturacion?open=${inv.id}` }).catch(() => {})
       }
       await tx.query(`INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1,'sale.return','sale',$2,$3)`, [user.id, id, JSON.stringify({ number, total: R, restock: b.restock, reason: b.reason })])
       return { id: returnId, number, total: R, appliedToDebt: applied, refunded: refund }
@@ -356,7 +416,7 @@ export function salesRoutes(app: FastifyInstance, db: Db) {
         const { rows: cu } = b.customerId ? await tx.query('SELECT name, ruc FROM customers WHERE id = $1', [b.customerId]) : { rows: [] as any[] }
         invoiceId = await createInvoice(tx, {
           saleId, customerName: cu[0]?.name ?? 'Consumidor final', customerRuc: cu[0]?.ruc ?? null, total,
-          tax10: taxes.tax10, tax5: taxes.tax5, exempt: taxes.exempt,
+          tax10: taxes.tax10, tax5: taxes.tax5, exempt: taxes.exempt, customerId: b.customerId ?? null, userId: user.id,
         })
       }
       await checkReplenishment(tx, [...wanted.keys()])

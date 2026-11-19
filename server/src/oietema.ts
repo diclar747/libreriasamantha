@@ -29,12 +29,12 @@ export async function consultarRuc(doc: string, base = DEFAULT_BASE): Promise<Ru
 }
 
 // ---------------------------------------------------------------- Emisión de factura / nota de crédito
-export interface FacturaItem { DESCRIPCION: string; CANTIDAD: number; PRECIO: number; IVA: 0 | 5 | 10 }
+export interface FacturaItem { CODIGO?: string; DESCRIPCION: string; CANTIDAD: number; PRECIO: number; IVA: 0 | 5 | 10 }
 export interface FacturaPayload {
   RUC: string; RAZON_SOCIAL: string; PERSONA: 'FISICA' | 'JURIDICA'; CONTRIBUYENTE: 'SI' | 'NO'
   CONDICION: 'CONTADO' | 'CREDITO'; PLAZO?: string
   ITEMS: FacturaItem[]
-  TIPO_DOCUMENTO?: 'NOTA_DE_CREDITO' | 'NOTA_DE_DEBITO'; MOTIVO?: string; FACTURA_CDC?: string
+  TIPO_DOCUMENTO?: 'NOTA_DE_CREDITO' | 'NOTA_DE_DEBITO'; MOTIVO?: number; FACTURA_CDC?: string
   EMAIL?: string
 }
 export interface EmitResult { status: 'approved' | 'rejected'; cdc?: string; number?: string; error?: string }
@@ -102,13 +102,19 @@ function withAssetBase(html: string, base: string): string {
 }
 
 // ---------------------------------------------------------------- Anulación
-export async function cancelar(cfg: OietemaConfig, cdc: string, motivo: string): Promise<{ ok: boolean; message?: string }> {
+// Evento de cancelación de SIFEN (cancelar_api.php). Solo facturas APROBADAS, dentro de las 48 h, motivo ≥ 5 caracteres.
+// Respuesta JSON: {"status":"ok","message":"Cancelación procesada exitosamente","protocolo":"123"} o {"status":"error","message":"..."}.
+export interface CancelResult { ok: boolean; message?: string; protocol?: string }
+export async function cancelar(cfg: OietemaConfig, cdc: string, motivo: string): Promise<CancelResult> {
   const base = cfg.base ?? DEFAULT_BASE
   const form = new URLSearchParams({ apiKey: cfg.apiKey, tenantId: cfg.tenant, cdc, motivo })
-  const t = withTimeout(20000)
+  const t = withTimeout(30000)
   try {
     const r = await fetch(`${base}/fact_elect/cancelar_api.php`, { method: 'POST', body: form, signal: t.signal })
-    const j = await r.json().catch(() => ({} as any))
-    return { ok: j.status === 'ok', message: j.message }
-  } catch (e: any) { return { ok: false, message: e.message } } finally { t.done() }
+    const text = await r.text()
+    let j: any = {}
+    try { j = JSON.parse(text) } catch { return { ok: false, message: text.trim().slice(0, 300) || `El facturador respondió ${r.status}` } }
+    const ok = String(j.status).toLowerCase() === 'ok' || String(j.status).toLowerCase() === 'success'
+    return { ok, message: j.message ?? j.mensaje, protocol: j.protocolo != null ? String(j.protocolo) : undefined }
+  } catch (e: any) { return { ok: false, message: `No se pudo conectar con el facturador: ${e.message}` } } finally { t.done() }
 }

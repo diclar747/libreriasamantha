@@ -62,8 +62,9 @@ export const MOVEMENTS_SQL = `
   WHERE p.kind = 'customer_payment' AND p.method <> 'advance'
   UNION ALL
   SELECT 'pay:' || p.id, p.at, CASE WHEN p.kind = 'return' THEN 'sale_return' ELSE 'refund' END, 'out', p.amount::bigint,
-    CASE WHEN p.kind = 'return' THEN 'Devolución de venta ' || s.number
-         WHEN EXISTS (SELECT 1 FROM invoices i WHERE i.sale_id = s.id AND i.kind = 'invoice') THEN 'Anulación de factura ' || s.number
+    CASE WHEN p.kind = 'return' AND p.details->>'creditNoteId' IS NOT NULL THEN 'Nota de crédito (' || COALESCE(p.details->>'concept', 'ajuste') || ') — venta ' || s.number
+         WHEN p.kind = 'return' THEN 'Devolución de venta ' || s.number
+         WHEN EXISTS (SELECT 1 FROM invoices i WHERE i.sale_id = s.id AND i.kind = 'invoice' AND i.status IN ('approved','cancelled')) THEN 'Anulación de factura ' || s.number
          ELSE 'Anulación de venta ' || s.number END,
     'Devoluciones y anulaciones', p.method::text,
     (${payAcct})::int, (${payDelta})::bigint, p.session_id,
@@ -71,6 +72,14 @@ export const MOVEMENTS_SQL = `
     p.settlement_status::text, p.fee::bigint, false
   FROM payments p JOIN sales s ON s.id = p.sale_id LEFT JOIN customers c ON c.id = s.customer_id
   WHERE p.kind IN ('refund','return') AND p.method <> 'advance'
+  UNION ALL
+  SELECT 'pay:' || p.id, p.at, 'debit_note', 'in', p.amount::bigint,
+    ('Nota de débito (' || COALESCE(p.details->>'concept', 'ajuste') || ') — venta ' || s.number)::text, 'Ventas'::text, p.method::text,
+    (${payAcct})::int, (${payDelta})::bigint, p.session_id,
+    'customer', s.customer_id, c.name::text, p.user_id, 'sale', s.id, s.number::text, p.reference::text, NULL::text,
+    p.settlement_status::text, p.fee::bigint, false
+  FROM payments p JOIN sales s ON s.id = p.sale_id LEFT JOIN customers c ON c.id = s.customer_id
+  WHERE p.kind = 'debit_note'
   UNION ALL
   SELECT 'sp:' || sp.id, sp.at, 'supplier_payment', 'out', (-sp.amount)::bigint, 'Pago a proveedor ' || s.name, 'Proveedores', sp.method::text,
     (${outAcct('sp')})::int, (-sp.amount)::bigint, sp.session_id,
@@ -133,7 +142,7 @@ export const MOVEMENTS_SQL = `
 `
 
 export const KIND_LABEL: Record<string, string> = {
-  sale_payment: 'Cobro de venta', customer_payment: 'Cobro de cuota/anticipo', refund: 'Reembolso', sale_return: 'Devolución',
+  sale_payment: 'Cobro de venta', customer_payment: 'Cobro de cuota/anticipo', refund: 'Reembolso', sale_return: 'Devolución', debit_note: 'Nota de débito',
   supplier_payment: 'Pago a proveedor', supplier_refund: 'Reembolso de proveedor', expense_payment: 'Pago de gasto', card_fee: 'Comisión descontada', cash_in: 'Ingreso de caja', cash_out: 'Retiro de caja',
   owner_contribution: 'Aporte del propietario', owner_withdrawal: 'Retiro del propietario', adjustment_in: 'Ajuste (+)', adjustment_out: 'Ajuste (−)',
   transfer: 'Transferencia', settlement: 'Liquidación', cheque_deposit: 'Depósito de cheque', cash_difference: 'Diferencia de caja',
@@ -185,7 +194,7 @@ export async function sessionCash(q: Q, sessionId: number) {
   const opening = Number(s[0].opening_float)
   const byMethod = new Map<string, { method: string; count: number; amount: number; fee: number }>()
   for (const r of rows) {
-    if (!['sale_payment', 'customer_payment', 'refund', 'sale_return'].includes(r.kind)) continue
+    if (!['sale_payment', 'customer_payment', 'debit_note', 'refund', 'sale_return'].includes(r.kind)) continue
     const m = byMethod.get(r.method) ?? { method: r.method, count: 0, amount: 0, fee: 0 }
     m.count++; m.amount += Number(r.amount); m.fee += Number(r.fee)
     byMethod.set(r.method, m)
